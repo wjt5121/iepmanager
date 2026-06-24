@@ -1,0 +1,317 @@
+# FDS Implementation Status
+
+This repo now includes an executable React/Vite MVP and local Node API for the IEP Implementation Workspace, using fictional demo records with API-backed persistence and browser-local fallback.
+
+## Implemented in the React MVP
+
+- Student profile and protected workspace shell with FDS-style tabs and a source-aware profile workflow map for overview, document, summary, goals, services, accommodations, progress, meeting prep, review, documents, and activity, including selected-student counts, gap statuses, and route/local-tab navigation
+- API-backed student profile intake and caseload selection with draft IEP scaffolds, active-student persistence, role-aware creation permission, no-source empty states, and no-IEP profile rendering
+- Active-student data scoping across the student workspace, plan summaries, implementation checklist, services/accommodations, progress monitoring, meeting prep, quality review, sidebar badges, exports, and assistant responses, with pending empty states for students whose source review is not yet approved
+- IEP upload/paste intake flow with preserved source metadata, selected-file upload through the local API, student-scoped extraction sections, OCR/source-quality review tracking, source-to-field mapping highlights, and reviewer-recorded source-anchor precision metadata
+- Structured extraction review with confidence, source references, map-source, edit metadata, confirm, reject, regenerate, approve actions, reviewed extraction text merged into the normalized structured record, and derived operational goals, services, accommodations, progress schedules, and implementation tasks
+- Normalized structured IEP records using the required FDS top-level sections, populated from source-aligned goals, services, accommodations, meetings, progress monitoring, and reviewed source fields
+- Pennsylvania source-registry layer with active source id, form type, effective date, retrieved date, registry version, product-use metadata, multilingual availability metadata, language-verification notes, review status, and next-review dates
+- Annotated-source field guidance from the source registry with field help, validation prompts, review prompts, and drafting guardrails surfaced in intake and quality review workflows
+- Source-alignment metadata attached to IEP records, preserved source documents, extraction cards, implementation tasks, summaries, and advisory review flags, including active-source language availability when known
+- Role-specific summaries for teacher, family, student, and reviewer audiences generated from approved structured obligations, refreshed after extraction approval, with audience-coverage checks for required FDS summary ingredients, copy, export, source-traced previous-IEP change explanations for families, source-aligned family/student understanding checks, and generated meeting handout controls
+- Reviewable previous/current IEP version-comparison register with local prior/current language intake, automated prior/current text-diff candidate generation, change type, implementation impact, family-summary language, source references, family/student visibility flags, amendment-review status and notes, human review notes, comparison digests, and official-record boundary text
+- Implementation checklist generated from IEP obligations, grouped by role and source section, with completion notes, classroom observations, evidence references, and teacher checklist export
+- Dashboard reminder center and deadline engine for tasks, stale progress schedules, service-log gaps, meetings, review flags, and draft approvals, with per-user reviewed status
+- Dashboard IEP review queue for recent source uploads, extraction status, extracted-section counts, source-form metadata, and direct navigation back to the human review/intake workflow
+- Dashboard recent parent summaries card that surfaces family-ready handouts, source alignment, prepared-by metadata, selected-student summary readiness, and direct navigation into the Family summary lens
+- Notification outbox for simulated reminder and meeting-packet follow-up, with audience, channel, message, delivery status, sender metadata, role-aware visibility, and audit history
+- Staff handoff acknowledgments with notes on implementation responsibilities
+- Role-aware team collaboration thread on the student workspace with comments and threaded replies tied to source-traced tasks, goals, services, accommodations, meetings, or review findings, plus moderation status, visibility review, moderation queue review, live-notification readiness notes, retention boundary review, moderation/queue digests, and official-record boundary text
+- Staff-only portal access review and invitation package preparation on the student workspace for parent/student account readiness, identity-evidence notes, language/support follow-up, scoped invite readiness, privacy boundary checks, review/invitation digests, role-aware filtering, and official-record boundary text
+- Services and accommodations view with frequency, duration, location, provider role, implementation start/end dates, evidence/logging requirements, source-section labels, dated missed-service recovery planning, assessment accommodations, assistive-technology and transportation access-support reviews, special considerations, behavior-support status, educational-placement rationale, and transition-service visibility
+- Progress monitoring dashboard with goal cards, baseline, measurement method, measurement schedule, stale/due indicators, evidence attachment metadata, charting, data entry, and per-goal draft progress report packet language with human-review boundaries
+- Meeting preparation workspace with agenda, required-participant readiness, teacher feedback rollup, simulated calendar holds, recording/transcript source-readiness reviews, transcript recap summaries, companion Pennsylvania document readiness, family/student resource-guide tracking for rights/options and meeting questions, glossary clarification tracking for confusing IEP terms, pre-read packet acknowledgments, scoped parent e-signature attestations, family questions, parent/team preparation notes, draft-to-final changes, participant context, student voice, self-advocacy prep, and a source-aware meeting-prep packet export with explicit review boundaries
+- Parent/student contribution flow for recording source-specific summary understanding checks, responding to family resource-guide items, acknowledging pre-read packets, submitting questions, adding meeting preparation notes, updating student voice, and maintaining a student-facing self-advocacy practice plan
+- Language-access workflow for parent/student requests, draft translated family summary support, source-aligned glossary terms with family/student clarification requests, and staff interpreter/glossary-response coordination status
+- Early-resolution concern and decision ledger with response, next-step, and PWN-support notes
+- Advisory quality review with generated completeness findings, severity, source references, suggested revisions, reviewer disposition notes, next actions, human resolution, and section coverage derived from the normalized structured IEP record
+- Formal compliance-review escalation workflow that lets authorized staff request qualified human review of advisory findings, lets administrators record outcomes, route records for district counsel input, capture counsel-response metadata, and clearly states that the record is not legal certification
+- Leadership dashboard with FDS-required due-soon IEPs, overdue progress reports, missing service logs, drafts pending review, compliance flags by school, caseload overview, and staff vacancy/continuity risk tracking
+- District implementation-readiness governance surface with district profile, tenancy mode, data-residency note, integration records for identity provider, SIS, notification delivery, calendar, e-signature, WORM retention, OCR, and source lifecycle, data-protection readiness controls for encryption, backups, migrations, concurrency, and deployment hardening, plus administrator review metadata
+- Drafting and fictional training workflow with guided intake questions, annotated sample cues, FDS-aligned generated draft sections for present levels, special considerations, measurable annual goals, short-term objectives, services/supports, supplementary aids, assessment accommodations, behavior support, transition services, and placement rationale, editable revisions, regenerated sections, preserved version history, and human approval before export
+- Role-aware access lens and blocked/allowed permission examples
+- Accessibility review surface with keyboard-navigation, screen-reader-label, live-status, language-access, human-review checks, VPAT-style evidence, WCAG/Section 508 findings, assistive-technology review notes, and remediation status in the audit trail
+- Role switcher that signs into demo accounts for case manager, general education, related service provider, parent, student, administrator, school administrator, district administrator, system administrator, and read-only reviewer roles, and disables controls for roles that cannot upload, approve extraction, enter progress, log services, plan recovery, resolve review findings, export, manage governance, or answer family questions
+- Session governance surface for administrators with demo identity-provider posture, session TTL, MFA-hardening status, tenant-boundary and role-provisioning readiness, live sanitized session rows, review history, revocation workflow, and local identity lifecycle review records with digest evidence
+- Audit anchoring and retention surface for administrators with latest local anchor records, verified hash-chain sequence, anchor digest, external reference, reviewer note, recorded external timestamp receipt evidence, sealed local retention manifests, local district retention-policy review records for schedule/legal-hold/archive boundaries, actor metadata, and role-aware access controls
+- Audit/activity log for upload, extraction approval, generated implementation tasks, AI-generated role summaries, edits, AI-assisted outputs, task updates, progress entries, resolved flags, and exports
+- AI governance surface with local model profile, prompt version, retrieval policy, required content labels, restricted-request guardrails, human-review boundary checks, evaluation scoring, reviewer notes, digest-backed guardrail evaluation runs, and automated local citation/source-match evaluation for AI-assisted outputs
+- API-backed exports for structured records, structured-record PDFs, district-system JSON import-review packages, summaries, teacher checklists, progress reports, review reports, audit packets, source-aware meeting-prep packets, service reports, and draft sections, plus local district export-template mapping review records with digest evidence and production-submission boundary text
+- Context-aware assistant drawer with FDS response modes for explanation, extraction support, parent/student/teacher summary generation with audience-coverage checks, checklist generation, goal measurability review, progress-monitoring support, draft IEP section generation, comparison, meeting prep, and fictional training examples, each with source-grounded advisory guardrails, restricted-request refusals for diagnosis/legal/final-decision prompts, missing-information prompts for legally sensitive service-recovery drafting, and content labels for extracted content, user-entered notes, AI suggestions, and human-reviewed warnings
+- Responsive desktop/mobile UI based on the high-fidelity wireframe concept
+- API-aware workspace hydration with browser-local fallback when the local API is unavailable
+- Automatic demo session login for API-backed workflows
+- Demo role switching reloads the server-scoped workspace for the selected account
+- Persistent workflow mutations through the local API for student profile creation, active student selection, intake, OCR/source-quality review, source-anchor review, extraction review with rejection/regeneration, downstream obligation derivation with explicit task-created and AI-generated-summary audit rows, role-summary refresh, summary understanding checks and staff responses, implementation task completion notes and evidence, classroom observations, team collaboration comments, threaded replies, moderation review, collaboration moderation queue review, parent/student portal access reviews and invitation packages, IEP version-comparison manual intake, auto-diff candidate generation, and human review, service logs, missed-service recovery plans, assistive-technology and transportation access-support reviews, educational-placement and LRE implementation review, progress entries with evidence metadata and schedule updates, reminder reviews, notification delivery, meeting responses, family resource-guide coordination and responses, glossary clarification requests and staff explanations, pre-read packet acknowledgments, scoped parent e-signatures, meeting preparation notes, student self-advocacy prep, required-participant readiness, simulated calendar holds, recording/transcript source-readiness reviews, meeting transcript recap summaries, companion-document readiness, source-registry review, AI guardrail evaluation, AI citation/source-match evaluation, district integration-readiness review, data-protection readiness review, accessibility remediation review, identity lifecycle security review, district export-template review, staff continuity coverage plans, generated advisory completeness review, review dispositions, formal compliance-review requests, administrator outcomes, district counsel routing, counsel-response records, guided draft generation/revision/regeneration/approval, audit anchor creation, external timestamp receipt recording, retention manifest sealing, retention policy review, and authorized exports
+- API-backed staff acknowledgment mutations for implementation handoff visibility
+- API-backed classroom observation mutations for general-education implementation notes tied to specific responsibilities
+- API-backed related-service provider role for service logging, missed-service recovery planning, implementation task acknowledgment, observations, and progress evidence without official IEP approval rights
+- API-backed read-only reviewer account with cross-caseload review visibility, limited governance exposure, and denied upload/progress/summary-sharing mutations
+- API-backed school, district, and system administrator demo accounts with separated boundaries for student implementation review, district registry/integration governance, and platform security/audit-retention governance
+- API-backed parent/student meeting-prep inputs for pre-meeting questions, meeting preparation notes, and student reflection updates
+- API-backed draft-to-final meeting decisions with final language, rationale, staff actor, and timestamp
+- API-backed summary sharing and generated meeting handouts with role-aware audience restrictions
+- API-backed family/student summary understanding-check submission and authorized staff response workflow with source alignment, language, follow-up status, role-aware visibility, audit logging, and official-record boundaries
+- API-backed language-access updates for parent/student requests, staff coordination, glossary clarification requests, and staff explanations, including translated family-summary drafts that preserve previous-IEP change context
+- API-backed concern submission and staff decision-record updates
+- Intake UI reads selected file bytes and submits them to the API for server-side source preservation and extraction
+- Intake and audit views display the active Pennsylvania source version, source id, registry entries, multilingual source availability, language-verification notes, and downstream source-alignment metadata
+- Audit trail source-registry review workflow lets authorized administrators mark source entries current, update needed, superseded, or future expansion without overwriting source-aligned IEP records
+- Audit trail source-registry administration workflow lets authorized administrators save district-reviewed source entries, update registry metadata, record source-language availability, and activate a source for future source-aligned intake without rewriting prior source records
+- Intake document viewer highlights the preserved source excerpt or source segment mapped to the selected extracted field
+- Student profile Documents and Activity tabs surface preserved source documents, current IEP source linkage, and student-context audit events without leaving the profile
+- Authorized exports request server-generated artifacts and download them from the local API when available, with normalized structured-record JSON, district-system import-review JSON, PDF report artifacts, and browser fallback for local-only or family/student summary access
+
+## Implemented in the Local API
+
+- Node HTTP API for workspace reads and FDS workflow mutations
+- Local demo authentication with username/password login and bearer sessions for educator, family, student, reviewer, school-administrator, district-administrator, and system-administrator lenses
+- Demo session governance with created/last-seen/expiry metadata, MFA-demo status, sanitized administrator session listing, revocation, and revoked-token rejection
+- Server-derived actor and role enforcement rather than trusted role headers
+- Student-scope filtering for workspace reads and student-record mutations
+- File-backed local workspace persistence in JSON
+- Server-side role permission checks for student profile creation, upload, extraction approval, task completion with evidence references, team collaboration comments/replies/moderation/queue review, portal access review and invitation package preparation, IEP version-comparison intake/review, progress entry with evidence references, service logging, missed-service recovery planning, access-support review, placement/LRE review, required-participant readiness coordination, family resource-guide coordination and family/student response, source-registry review, source-registry administration, AI governance evaluation, district configuration review, accessibility remediation review, security session governance, identity lifecycle security review, district export-template review, audit anchoring, retention packaging, retention policy review, staff continuity plan updates, advisory review generation/disposition/resolution, formal compliance-review request/completion, district counsel routing and counsel-response recording, question response, drafting, draft revision, draft approval, and export actions, with school/district/system administrator roles split by responsibility
+- Server-side task completion endpoint records authenticated staff actor, role, timestamp, note, evidence document id, and evidence label
+- Server-side service recovery endpoint that records recovery date, responsible provider, family communication note, authenticated planner, timestamp, and audit entry
+- Server-side access-support endpoint for assistive-technology and transportation review records with authenticated reviewer, status, owner, implementation plan, review note, source alignment, official-record boundary text, SHA-256 support digest, and audit logging
+- Server-side placement/LRE review endpoint for educational-placement rationale records with authenticated reviewer, status, LRE consideration, implementation impact, follow-up owner, next-review date, source alignment, official-record boundary text, SHA-256 placement digest, and audit logging
+- Server-side portal access review and portal invitation package endpoints for parent/student account-readiness records with authenticated reviewer, identity-evidence and invite-scope notes, language/support follow-up, privacy boundary text, source alignment, official-record boundary text, SHA-256 review/invitation digests, staff/read-only visibility filtering, parent/student evidence suppression, and audit logging
+- Server-side task acknowledgment endpoint that records authenticated staff actor, role, timestamp, and note
+- Server-side team comment endpoint records authenticated actor, role, student scope, target type/id/title, visibility, source reference, source alignment, official-record boundary text, role-aware filtering, and audit logging
+- Server-side reminder review endpoint records authenticated actor, user id, role, timestamp, student scope, and audit entry without changing the underlying IEP obligation
+- Server-side notification delivery endpoint records authenticated sender, role, student scope, audience, channel, message, source reminder or packet, source alignment, simulated sent status, and audit entry
+- Server-side summary sharing endpoint that records copy actions and generated handouts with authenticated actor, role, audience, source alignment, prompts, and audit entry, and blocks sharing until the selected student's extraction is approved
+- Server-side IEP comparison endpoints with case-manager/administrator review permission, student-scope checks, manual prior/current language capture, automated local text-diff candidate generation, prior/current comparison status, family/student visibility flags, SHA-256 comparison review digests, and audit logging
+- Server-side draft revision and regeneration endpoints that record reviewer actor, role, timestamp, guidance, and prior section text in version history
+- Server-side draft generation persists guided questionnaire responses and annotated sample cues in the draft package
+- Server-side draft approval endpoint records authenticated approver metadata and blocks draft-section export until approval
+- Server-side meeting-prep submission endpoints for parent/student questions, meeting preparation notes, family resource-guide responses, pre-read packet acknowledgments, scoped parent e-signature attestations, student voice updates, self-advocacy prep, companion-document readiness, and student-scope checks
+- Server-side scoped e-signature endpoints for authorized staff requests and parent typed-signature attestations with SHA-256 signature hashes, not-consent caveats, student-scope checks, and audit logging
+- Server-side calendar-hold endpoint records authenticated coordinator, role, meeting scope, provider, attendance mode, attendees, calendar UID, source alignment, simulated hold status, and audit entry
+- Server-side meeting recording/readiness and transcript recap endpoints record authenticated reviewer, consent/source-readiness evidence, transcript source/excerpt, summary, decisions, follow-ups, family/student visibility flags, source alignment, SHA-256 readiness/recap digests, official-record boundary text, and audit logging
+- Server-side draft-to-final meeting decision endpoint with role-specific staff permission, required final language and rationale, and audit logging
+- Server-side language-access endpoint with role-specific request/coordination permissions and draft translated family summary support
+- Server-side concern ledger endpoints for parent/student concern submission and authorized staff decision records
+- Server-side staff continuity endpoint with school/district administrator update permission, student-scope checks, reviewed actor metadata, and audit logging
+- Server-side source-registry review endpoint with authorized governance-admin update permission, reviewed actor metadata, next-review date, and audit logging
+- Server-side source-registry administration endpoint with district-administrator save/update permission, source-entry normalization, multilingual availability list normalization, registry-version updates, active-source selection, reviewed actor metadata, and audit logging
+- Server-side AI governance endpoints with district/system administrator evaluation permission, deterministic guardrail checks for source traceability, content labels, restricted decisions, human review, local citation/source-match checks for AI-assisted output text, reviewer notes, SHA-256 evaluation digests, model profile metadata, and audit logging
+- Server-side district-configuration endpoint with district/system administrator integration-readiness and data-protection readiness updates, provider/control/owner/status/next-review metadata, SHA-256 configuration digests, limited non-admin visibility, and audit logging
+- Server-side accessibility remediation endpoint with district/system administrator WCAG/Section 508 finding updates, owner/status/severity/assistive-technology metadata, SHA-256 accessibility review digests, and audit logging
+- Server-side security session endpoints with administrator/system permission, current-session revocation protection, identity-provider lifecycle readiness review, MFA/tenant-boundary/role-provisioning status normalization, SHA-256 security review digest, reviewed actor metadata, durable security review records, and audit logging
+- Server-side audit anchor endpoint with system-administrator permission, verified hash-chain precheck, local SHA-256 anchor digest, external reference, reviewer note, external timestamp receipt evidence with SHA-256 digest, actor metadata, and audit logging
+- Server-side audit retention endpoint with system-administrator permission, verified hash-chain precheck, selected-anchor hash matching, local write-once manifest file, workspace/audit evidence digests, download URL, and audit logging
+- Server-side retention policy review endpoint with administrator/district/system permission, verified audit-chain precheck, optional anchor/manifest linkage, policy source, scope, retention period, legal-hold status, archive decision, SHA-256 policy digest, production-boundary language, role-aware visibility filtering, and audit logging
+- Server-side compliance-review and legal-routing endpoints for case-manager escalation, school/district administrator outcome recording, district-administrator counsel routing, counsel-response metadata, student-scope checks, source-alignment retention, not-legal-certification marking, and audit logging
+- Document intake endpoint with preserved source text and heuristic structured extraction output
+- Student profile endpoint creates draft intake scaffolds with required normalized IEP sections, and active-student selection endpoint persists the selected caseload workspace with student-scope enforcement
+- Server-side selected-file intake for `.txt`, `.docx`, and `.pdf` payloads
+- Original uploaded source bytes saved under `data/documents/` with size and SHA-256 metadata
+- DOCX document-body extraction from Word XML with paragraph source references
+- Page-aware embedded PDF text extraction with preserved page source segments, warnings when OCR would be required, authenticated OCR/source-quality review records with reviewer notes, confidence, excerpts, and digests, and field-level source-anchor reviews with page, segment, bounding-box, reviewer-note, and digest metadata
+- Source-segment references on extracted review cards when a matching paragraph, text segment, or PDF page segment is available
+- API-backed document intake and extraction approval stamp active Pennsylvania source-alignment metadata onto preserved documents, extraction sections, and structured IEP records
+- API-backed extraction rejection and regeneration preserve reviewer metadata, prior extracted text, source references, and audit history before approval
+- Server-side export artifact generation for structured JSON records, district-system JSON import-review packages with FDS section validation and package digests, report-style DOCX packets, paginated PDF packets, and district export-template mapping reviews linked to generated package artifacts
+- Export artifacts saved under `data/exports/` with file name, size, SHA-256 metadata, and download URL; export-template review records retain package file/hash evidence and a SHA-256 template review digest
+- Append-only NDJSON audit log with hash chaining and a verification endpoint
+- Local audit anchor records that bind a verified audit-chain sequence and latest hash to a digest plus district external-reference note
+- Local write-once retention manifest records that bind a verified anchor to workspace and audit-log evidence digests under `data/retention/`, plus local retention policy review records that document district schedule, legal-hold, archive, and purge-boundary decisions without enforcing production retention
+- Serialized write operations so concurrent mutations do not corrupt workspace state or the audit hash chain
+- API coverage for seed workspace access, permission denials, document intake, DOCX parsing and byte preservation, progress entry, generated advisory review flags, advisory flag disposition requirements, and audit tamper detection
+- API coverage verifies unauthenticated requests are rejected and spoofed role headers do not bypass session permissions
+- API coverage verifies student profile creation permission checks, draft IEP scaffold creation, active-student selection persistence, student-scope denial, and audit-chain validity
+- API coverage verifies security session listing is sanitized, administrator-only revocation and identity lifecycle review are enforced, revoked bearer tokens are rejected, security review records and digests persist, and the audit chain remains valid
+- API coverage verifies administrator-only audit anchor creation, local anchor digest persistence, verified sequence/hash capture, external timestamp receipt persistence, audit logging, and post-anchor hash-chain validity
+- API coverage verifies administrator-only retention manifest sealing, anchor hash matching, local write-once manifest persistence, evidence digests, manifest download, retention policy review permission boundaries, policy digests, role filtering, and post-review audit-chain validity
+- API coverage verifies Pennsylvania source-registry metadata and language availability metadata are present and attached to IEP records, summaries, tasks, review flags, preserved documents, and extraction sections
+- API coverage verifies approved structured IEP records include the required normalized FDS top-level sections with populated goals, services, accommodations, progress monitoring, state/local assessment accommodations, and special considerations
+- API coverage verifies extraction editing into approved structured records, downstream goal/service/accommodation/task derivation including service/accommodation implementation dates and evidence/logging metadata, refreshed role summaries, rejection/regeneration, permission denial for family edits, and audit-chain validity
+- API coverage verifies summary copy audit entries, source-traced previous-IEP change sections, and generated handouts while blocking out-of-audience family access
+- API coverage verifies previous/current IEP comparison manual intake, automated text-diff candidate generation, review permission, role-visible comparison filtering, family/student visibility flags, amendment-review notes, comparison review digests, official-record boundary language, and audit-chain validity
+- API coverage verifies PDF intake preserves original bytes, extracts embedded text into page-aware source segments, records OCR warnings, attaches page references to extracted fields, persists OCR/source-quality review metadata, persists field-level source-anchor bounding-box metadata into approved structured records, and blocks unauthorized roles
+- API coverage verifies progress evidence attachment metadata and measurement schedule advancement while blocking family edits
+- API coverage verifies implementation task completion evidence metadata while blocking family edits
+- API coverage verifies classroom observations on implementation tasks while blocking family edits and incomplete staff submissions
+- API coverage verifies parent/student meeting-prep submissions, meeting preparation notes, source alignment, official-record boundary language, and staff-only team responses
+- API coverage verifies parent/student pre-read packet acknowledgments while blocking staff updates and cross-role packet updates
+- API coverage verifies scoped e-signature request permissions, parent-only signing, not-consent caveats, signature hashes, and audit logging
+- API coverage verifies student self-advocacy prep updates while blocking staff roles that cannot replace student preparation
+- API coverage verifies reminder reviews, duplicate review replacement, student-scope denial, and audit-chain validity
+- API coverage verifies notification delivery permission checks, role-aware family visibility, sender metadata, and audit logging
+- API coverage verifies role-aware team collaboration comments, threaded replies, moderation and queue-review permission checks, moderation and queue digests, staff-only reply filtering, family visibility normalization, source-target resolution, notification/retention boundary notes, source alignment, official-record boundary language, and audit-chain validity
+- API coverage verifies staff portal access review and invitation package permission checks, required identity/privacy/scope evidence, read-only reviewer visibility, parent/student evidence suppression, review and invitation digests, source alignment, official-record boundary language, and audit-chain validity
+- API coverage verifies read-only reviewer workspace visibility and denial of write/export/share-style actions.
+- API coverage verifies school/district/system administrator role separation, including school continuity updates without district configuration access, district source-registry administration without audit-anchor authority, and system security-session governance with zero assigned student records.
+- API coverage verifies meeting calendar hold permission checks, student-scope visibility, coordinator metadata, and audit logging
+- API coverage verifies meeting recording/readiness and transcript recap permission checks, role-aware family/student visibility filtering, source alignment, readiness/recap digests, official-record boundary language, and audit-chain validity
+- API coverage verifies draft-to-final meeting decisions while blocking family edits and incomplete staff submissions
+- API coverage verifies companion Pennsylvania document readiness updates while blocking family edits and preserving source-alignment metadata
+- API coverage verifies guided draft questionnaire responses and annotated sample cues persist into the expanded FDS-aligned generated draft section package
+- API coverage verifies draft section revision and regeneration history while blocking family edits and incomplete staff submissions
+- API coverage verifies draft export is blocked before human approval, reset after regeneration, and allowed after authorized approval
+- API coverage verifies server-generated PDF exports include PDF headers, visible report text, page footer text, MIME metadata, download URLs, and persisted artifact metadata
+- API coverage verifies district export-template review permission boundaries, generated package linkage, package file/hash evidence, template digests, role filtering, production-submission boundary language, and audit-chain validity
+- API coverage verifies district-system JSON packages include selected-student scope, approved IEP status, source-registry metadata, FDS section coverage validation, not-official-submission guardrails, package digests, download metadata, and persisted export records
+- API coverage verifies staff task acknowledgments while blocking family edits
+- API coverage verifies language-access requests, draft translated summaries with previous-IEP change context, interpreter coordination, glossary clarification requests, staff glossary explanations, and permission denial for read-only staff roles
+- API coverage verifies concern submissions, staff-only decision records, PWN-support notes, and audit-chain validity
+- API coverage verifies detailed missed-service recovery planning by related-service providers, required fields, permission denial for family roles, blocked advisory-review access, and audit-chain validity
+- API coverage verifies assistive-technology and transportation access-support review permission checks, required fields, source-alignment retention, support digests, role-scoped visibility, and audit-chain validity
+- API coverage verifies educational-placement and LRE review permission checks, required fields, source-alignment retention, placement digests, role-scoped visibility, official-decision boundary language, and audit-chain validity
+- API coverage verifies staff continuity visibility filtering, administrator-only coverage-plan updates, source-alignment retention, reviewed actor metadata, and audit-chain validity
+- API coverage verifies source-registry review updates, administrator-only permission, reviewed actor metadata, and audit-chain validity
+- API coverage verifies source-registry entry administration, active-source selection, source-entry list parsing, multilingual availability persistence, downstream intake source-alignment inheritance, permission denial for non-admin roles, and audit-chain validity
+- API coverage verifies administrator-only AI guardrail evaluation and citation/source-match evaluation, source/human-review check persistence, citation matching against workspace source references, evaluation digests, model prompt metadata, and audit-chain validity
+- API coverage verifies administrator-only district integration-readiness and data-protection readiness updates, configuration digests, limited non-admin visibility, and audit-chain validity
+- API coverage verifies administrator-only accessibility remediation updates, VPAT-style evidence persistence, accessibility digests, and audit-chain validity
+- API coverage verifies formal compliance-review request permission, administrator-only outcome recording, district counsel route permission, route/outcome digests, reviewer metadata, not-legal-certification language, and audit-chain validity
+
+## Verified
+
+- `npm run build` completes successfully.
+- `npm run test:api` passes.
+- `npm run test:fds` passes.
+- API-backed browser coverage verifies that a UI workflow mutation persists through the local API, survives reload, and leaves the audit chain valid.
+- API-backed browser coverage verifies dashboard reminder review persistence and audit entry creation.
+- API-backed browser coverage verifies dashboard IEP review queue visibility for approved seed sources and newly uploaded sources awaiting human review.
+- API-backed browser coverage verifies dashboard notification delivery persistence, role-aware outbox records, and audit entry creation.
+- Browser coverage verifies the Student profile workflow map, routed Compliance Review navigation, local Documents/Activity navigation, and pending map states for students without approved source records.
+- API-backed browser coverage verifies team collaboration comments, threaded replies, moderation review, collaboration queue review, persisted source-target metadata, notification/retention boundary notes, role-visible comment/reply filtering, and audit-chain validity from the Student workspace.
+- API-backed browser coverage verifies portal access review creation and invitation package preparation from the Student workspace, persisted reviewer/preparer metadata, review and invitation digests, parent-role evidence suppression, and audit-chain validity.
+- API-backed browser coverage verifies staff handoff acknowledgment through a role-specific demo session.
+- API-backed browser coverage verifies implementation task completion evidence through a role-specific demo session.
+- API-backed browser coverage verifies classroom observations from the UI and persistence of staff actor, task linkage, and audit entry.
+- API-backed browser coverage verifies related-service provider role switching and missed-service recovery persistence with the related-service actor.
+- API-backed browser coverage runs through frontend demo session login and bearer-token API requests.
+- API-backed browser coverage verifies that switching to the parent role creates a parent bearer session and returns a student-scoped workspace.
+- API-backed browser coverage verifies parent question submission and student reflection updates through role-specific demo sessions.
+- API-backed browser coverage verifies parent meeting preparation notes persist with source alignment, official-record boundary language, and audit entry creation.
+- API-backed browser coverage verifies parent pre-read packet acknowledgment persistence through a role-specific demo session.
+- API-backed browser coverage verifies staff-requested scoped parent e-signatures and parent typed-signature hashes through demo sessions.
+- API-backed browser coverage verifies student self-advocacy prep updates through the student demo session.
+- API-backed browser coverage verifies summary copy audit and generated meeting handout persistence from the UI.
+- API-backed browser coverage verifies generated family handouts appear on the dashboard Recent parent summaries card.
+- API-backed browser coverage verifies the family summary exposes source-traced changes from the previous IEP and preserves them in copied text and handouts.
+- API-backed browser coverage verifies IEP version-comparison manual intake, automated prior/current text-diff candidate generation, and review from the Plan summary, amendment-review boundary notes, persisted status/reviewer metadata, comparison digests, and audit-chain validity.
+- API-backed browser coverage verifies progress evidence attachment, schedule updates, and per-goal draft progress report packet language through a teacher role session.
+- API-backed browser coverage verifies draft-to-final meeting decisions from the UI and persistence of final language, rationale, staff actor, and audit entry.
+- API-backed browser coverage verifies required participant readiness coordination from the UI and persistence of status, mode, staff actor, note, and audit entry.
+- API-backed browser coverage verifies companion document readiness coordination from the UI and persistence of status, owner, staff actor, note, and audit entry.
+- API-backed browser coverage verifies calendar hold creation from the UI and persistence of provider, attendance mode, staff actor, UID, and audit entry.
+- API-backed browser coverage verifies meeting recording/readiness reviews and transcript recap summaries from the UI and persistence of reviewer metadata, visibility flags, readiness/recap digests, and audit-chain validity.
+- API-backed browser coverage verifies guided draft questionnaire answers and annotated sample cues persist through the expanded FDS-aligned draft generation package.
+- API-backed browser coverage verifies expanded draft section visibility plus draft section revisions and regeneration from the UI and persistence of version history, reviewer actor, and audit entry.
+- API-backed browser coverage verifies draft export is disabled until a qualified user approves the draft package and remains disabled after regeneration until re-approved.
+- API-backed browser coverage verifies parent language-support requests, family glossary clarification requests, and case-manager translation/interpreter/glossary-response coordination through demo sessions.
+- API-backed browser coverage verifies parent concern logging and case-manager decision-record updates through demo sessions.
+- API-backed browser coverage verifies missed-service recovery planning from the UI and persistence of date, provider, family communication, planner, and audit entry.
+- API-backed browser coverage verifies assistive-technology and transportation access-support review from the Services UI with reviewer metadata, support digest, and audit-chain validity.
+- API-backed browser coverage verifies educational-placement and LRE review from the Quality Review UI with reviewer metadata, placement digest, source boundary language, and audit-chain validity.
+- API-backed browser coverage verifies district integration-readiness and data-protection readiness updates from the Leadership dashboard, persisted provider/control/status/owner metadata, configuration digests, and audit-chain validity.
+- API-backed browser coverage verifies staff continuity coverage-plan updates from the Leadership dashboard and persistence of risk, owner, reviewer, and audit entry.
+- API-backed browser coverage verifies that a selected text file uploads through the intake UI, is preserved by the API, and produces extracted sections with source references.
+- API-backed browser coverage verifies student profile creation before source intake, no-source/no-extraction empty states, student-scoped source preservation, student-scoped extraction sections, roster-driven active-student selection, and no cross-student leakage across implementation, services, progress, meetings, summaries, and quality review.
+- API-backed browser coverage verifies selected PDF upload, page-aware source segment metadata, source-to-field mapping, OCR/source-quality review persistence, source-anchor review persistence, and persisted page references.
+- API-backed browser coverage verifies extraction rejection and regeneration from the intake UI with prior text preservation.
+- API-backed browser coverage verifies edited extracted fields are reviewer-attributed, persist into the approved structured IEP record, produce derived progress-monitoring implementation work, and appear in refreshed family summary language.
+- API-backed browser coverage verifies source-to-field mapping highlights after selected-file intake.
+- API-backed browser coverage verifies source-alignment metadata is visible after intake and registry entries are visible in the audit trail.
+- API-backed browser coverage verifies source-registry review updates from the Audit trail and persistence of status, review note, reviewer, and audit entry.
+- API-backed browser coverage verifies source-registry administration from the Audit trail, active-source persistence, case-manager visibility of the active source, and future intake source-alignment inheritance.
+- API-backed browser coverage verifies AI governance guardrail evaluation and citation/source-match evaluation from the Audit trail, model-profile visibility, persisted checks, reviewer metadata, digest creation, and audit-chain validity.
+- API-backed browser coverage verifies administrator session governance from the Audit trail, session revocation, identity lifecycle review, security-review digest persistence, audit entry creation, and revoked-token rejection.
+- API-backed browser coverage verifies district export-template review from the Audit trail after generating a district-system package, persisted package linkage, template digest creation, production-submission boundary display, and audit entry creation.
+- API-backed browser coverage verifies accessibility remediation evidence from the Audit trail, persisted WCAG finding updates, assistive-technology notes, remediation digests, and audit-chain validity.
+- API-backed browser coverage verifies audit anchor creation, external timestamp receipt recording, retention manifest sealing, and retention policy review from the Audit trail, verified sequence/hash capture, local anchor digest display, receipt digest display, manifest download, legal-hold/archive boundary display, and audit-chain validity after policy review.
+- API-backed browser coverage verifies formal compliance-review escalation from Quality Review, administrator outcome recording, district counsel routing, counsel-response recording, audit-trail visibility, reviewer metadata, and not-legal-certification language.
+- API-backed browser coverage verifies quality-review section coverage renders from normalized structured-record content.
+- API-backed browser coverage verifies generated completeness review findings from the structured IEP record.
+- API-backed browser coverage verifies advisory findings require a reviewer disposition, rationale, and next action before closing.
+- Browser coverage verifies the Services surface exposes assessment accommodations and special-consideration/behavior-support visibility from the normalized record.
+- Browser coverage verifies the Services surface exposes implementation windows and evidence/logging requirements for services and accommodations.
+- API-backed browser coverage verifies server-generated teacher checklist and source-aware meeting packet DOCX downloads, structured-record PDF downloads, district-system JSON package downloads, meeting-packet review-boundary content, district package guardrails, and workspace export metadata.
+- Browser coverage verifies the Student Profile Documents and Activity Log tabs expose preserved sources and student activity in place.
+- Browser coverage verifies the Leadership dashboard exposes the FDS-required admin oversight cards, staff continuity risks, and rollups.
+- Browser QA in local Google Chrome verified all major views render.
+- Browser QA verified these stateful workflows:
+  - preserve source and generate extraction sections
+  - reject and regenerate an extracted section before approval
+  - copy a role-specific summary and generate a meeting handout with audience-coverage metadata
+  - complete an implementation task
+  - complete an implementation task with evidence notes
+  - add a progress data point
+  - attach progress evidence and advance the measurement schedule
+  - log service minutes
+  - plan missed-service recovery with provider and family communication
+  - generate advisory completeness findings and resolve one with reviewer disposition notes
+  - request formal compliance review and record an administrator outcome
+  - create a local audit anchor and seal a retention manifest from the verified audit hash chain
+  - answer a family meeting question
+  - record a draft-to-final meeting decision
+  - update a staff continuity coverage plan from the Leadership dashboard
+  - generate fictional draft/training sections
+  - answer guided draft intake questions and provide annotated sample cues
+  - revise fictional draft/training sections with version history
+  - regenerate fictional draft/training sections while preserving prior versions
+  - approve fictional draft/training sections before export
+  - display audit history for workflow events
+  - answer with the assistant drawer in explanation, extraction-support, checklist, goal-measurability review, and progress-monitoring support modes
+- Automated Playwright FDS smoke tests cover major views, portal access review and invitation package controls, team collaboration comment/reply/moderation/queue-review controls, stateful workflow actions, parent-role restrictions, system-administrator access-lens boundaries with zero student scope, and mobile audit layout overflow.
+- Automated Playwright FDS smoke tests cover skip navigation, main-region labeling, live status announcements, visible accessibility review checks, and unnamed interactive-control detection.
+- Automated Playwright FDS smoke tests cover assistant extraction support, parent/student summary generation, audience coverage, goal-measurability review, dedicated progress-monitoring support, draft IEP section generation, content labels, diagnosis/legal/final-decision guardrails, missing-information prompts for service-recovery drafting, and source-grounded progress-monitoring caveats.
+- Automated Playwright FDS smoke tests cover annotated-source field help and source-guided quality-review prompts.
+- Automated Playwright FDS smoke tests cover family/student meeting-prep contribution from the UI.
+- Automated Playwright FDS integration tests cover student self-advocacy prep from the UI.
+- Automated Playwright FDS integration tests cover parent pre-read packet acknowledgment from the UI.
+- Automated Playwright FDS integration tests cover scoped parent e-signature request and signing from the UI.
+- Automated Playwright FDS integration tests cover reminder notification delivery from the dashboard UI.
+- Automated Playwright FDS integration tests cover page-aware PDF source anchoring and reviewer-recorded source-anchor bounding-box metadata from the intake UI.
+- Automated Playwright FDS integration tests cover student profile creation and active caseload selection from the intake and dashboard UI.
+- Automated Playwright FDS integration tests cover summary copy and meeting handout generation from the UI.
+- Automated Playwright FDS integration tests cover prior/current IEP comparison manual intake, automated text-diff candidate generation, and IEP version-comparison review from the Plan summary UI.
+- Automated Playwright FDS integration tests cover draft-to-final meeting decision recording from the UI.
+- Automated Playwright FDS integration tests cover required participant readiness coordination from the UI.
+- Automated Playwright FDS integration tests cover meeting calendar hold creation from the UI.
+- Automated Playwright FDS integration tests cover meeting recording/readiness reviews and transcript recap summaries from the UI.
+- Automated Playwright FDS integration tests cover assistive-technology and transportation access-support review from the Services UI.
+- Automated Playwright FDS integration tests cover companion Pennsylvania document readiness from the UI.
+- Automated Playwright FDS integration tests cover draft section revision, regeneration, and version history from the UI.
+- Automated Playwright FDS integration tests cover draft approval gating before export and after regeneration.
+- Automated Playwright FDS integration tests cover structured-record PDF export from the intake UI.
+- Automated Playwright FDS integration tests cover staff handoff acknowledgment from the UI.
+- Automated Playwright FDS integration tests cover implementation task completion evidence from the UI.
+- Automated Playwright FDS integration tests cover language-access request and coordination from the UI.
+- Automated Playwright FDS integration tests cover concern logging and decision-record updates from the UI.
+- Automated Playwright FDS integration tests cover Leadership district integration-readiness and data-protection readiness updates from the UI.
+- Automated Playwright FDS integration tests cover Leadership staff continuity plan updates from the UI.
+- Automated Playwright FDS integration tests cover Audit trail source-registry review updates from the UI.
+- Automated Playwright FDS integration tests cover Audit trail source-registry administration and future source-alignment inheritance from the UI.
+- Automated Playwright FDS integration tests cover Audit trail AI governance guardrail and citation evaluation from the UI.
+- Automated Playwright FDS integration tests cover Audit trail security-session governance and revoked-token rejection from the UI.
+- Automated Playwright FDS integration tests cover Audit trail accessibility remediation updates from the UI.
+- Automated Playwright FDS integration tests cover Audit trail audit-anchor creation, external timestamp receipt recording, retention manifest sealing, manifest download, and retention policy review from the UI.
+- Automated Playwright FDS integration tests cover formal compliance-review request, administrator outcome, district counsel routing, counsel-response recording, and audit-log visibility from the UI.
+- Mobile QA at 390px wide reported no horizontal overflow.
+
+## Not Yet Production-Implemented
+
+- Production district identity-provider integration, full tenancy isolation model, account lifecycle automation, enforceable MFA/session policies, and production-grade authorization policies beyond demo session governance, local identity lifecycle review records, and local district readiness records
+- Production database persistence, encryption, backups, migrations, enforceable retention policies, multi-user concurrency controls, and deployment hardening beyond the local JSON/NDJSON store, serialized local write lock, administrator data-protection readiness records, and local retention-policy review records
+- Production external audit-anchor notarization, district WORM storage integration, or live third-party timestamping beyond the local verified anchor, recorded timestamp receipt evidence, write-once retention manifest workflow, and local retention-policy review workflow
+- Full production OCR for scanned documents, robust third-party PDF parsing, and automated exact source bounding-box anchoring beyond page-aware embedded-text segments, local OCR/source-quality review records, and reviewer-recorded local source-anchor metadata
+- Live AI provider integration and production model-evaluation pipelines beyond the local deterministic model profile, guardrail evaluation harness, and citation/source-match evaluator
+- Production-grade export templates and live district-system submission/integration formats beyond the local JSON/DOCX/PDF artifact generators, district-system import-review JSON package, and local export-template mapping review records
+- Full parent/student portal hardening, external notification delivery providers, production e-signature identity proofing/provider integration, or live calendar/SIS integrations beyond local readiness tracking, staff-only portal access review records, and staff-prepared invitation packages
+- Production real-time collaboration, live threaded notifications, comment moderation queues, and enforceable district retention-policy automation beyond the local role-aware source-traced team comment, reply, moderation-review, moderation-queue readiness workflow, and local retention policy review records
+- Production bulk document-version ingestion, robust semantic old/new IEP diffing, and official amendment workflows beyond the local automated text-diff candidates, human-reviewed prior/current language intake, amendment-boundary notes, and version-comparison register
+- Production meeting recording/transcription provider integration beyond the local recording/transcript readiness review and pasted transcript recap workflow
+- Production legal-review provider integrations, attorney-client workflow controls, and district-specific approval routing beyond the local counsel-routing record workflow
+- Production multi-district tenant isolation, automated registry approval governance, and full source lifecycle management beyond local district readiness and source-registry administration workflows
+- Production accessibility certification with external auditing tools and formal VPAT publication beyond the local WCAG/Section 508 remediation workflow and VPAT-style evidence records
+- Comprehensive unit/integration test suite beyond the current FDS smoke tests

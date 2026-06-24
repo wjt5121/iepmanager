@@ -1,0 +1,4 @@
+source_id,title,type,program_area,effective_date,url,download_notes,product_use
+pa-school-age-iep,Individualized Education Program (IEP),Official blank form,School Age,2025-07-01,https://www.pattan.net/Forms/Individualized-Education-Program-IEP-1-1,"Source page lists PDF and DOCX downloads in dropdown",Schema;Extraction;Export alignment
+pa-school-age-iep-annotated,Individualized Education Program (IEP) (Annotated),Official annotated form / guidance,School Age,2026-01-01,https://www.pattan.net/Forms/Individualized-Education-Program-IEP-1-1-1,"Source page lists PDF and DOCX downloads in dropdown",Field help;Validation;AI review;Training
+pa-ei-forms,PDE Early Intervention Forms,Official forms hub,Early Intervention,,https://www.pa.gov/agencies/education/programs-and-services/instruction/early-learning/early-intervention/forms,"Contains linked EI IEP and annotated IEP forms",Future EI workflow support
