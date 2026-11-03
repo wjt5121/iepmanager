@@ -82,6 +82,10 @@ test.describe("IEP Implementation Workspace FDS smoke coverage", () => {
     await nav(page, "Overview");
     await expect(page.getByText("Notification outbox")).toBeVisible();
     await expect(page.getByText("Send reminder notice")).toBeVisible();
+    const classroomCard = page.locator(".card").filter({ hasText: "Classroom management" });
+    await expect(classroomCard).toBeVisible();
+    await expect(classroomCard.getByText("Record classroom roster review")).toBeVisible();
+    await expect(classroomCard.getByText("15 students", { exact: true })).toBeVisible();
 
     const requiredViews = [
       ["Student workspace", ["Profile workflow map", "FDS profile sections", "Human-approved record", "IEP Document", "Plan Summary", "Goals", "Services", "Accommodations", "Progress Monitoring", "Meeting Prep", "Compliance Review", "3 goals", "3 services", "3 supports", "Readiness 78%", "IEP at a glance", "Portal access review", "Record portal access review", "Portal invitation packages", "Prepare portal invitation", "Team collaboration thread", "Add team comment", "Add thread reply", "Moderation status", "Record moderation review", "Collaboration moderation queue", "Record queue review", "Documents", "Activity Log"]],
@@ -94,7 +98,7 @@ test.describe("IEP Implementation Workspace FDS smoke coverage", () => {
       ["Quality review", ["Review score", "Run completeness review", "Human review disposition", "Formal compliance review", "Request compliance review", "Compliance review outcome", "District counsel routing", "Route to district counsel", "Record counsel response", "Placement and LRE review", "Update placement review", "Section coverage", "Source-guided review prompts", "Not documented"]],
       ["Drafting & training", ["Guided profile", "Guided intake questionnaire", "Annotated sample or district language", "Draft package"]],
       ["Audit trail", ["Source chain", "Source registry review", "Source registry administration", "Export template review", "Record export template review", "Activity log", "Audit anchoring", "Record timestamp receipt", "Retention packages", "Current access lens", "Session governance", "Record identity lifecycle review", "Content classification", "AI governance", "Run AI guardrail evaluation", "Run AI citation evaluation", "Notification delivery log", "Calendar hold log", "Compliance review log", "Accessibility review", "VPAT-style", "Update accessibility finding", "Keyboard navigation", "Screen reader labels", "Live status updates", "Language access"]],
-      ["Leadership", ["IEPs due soon", "Overdue progress reports", "Missing service logs", "Drafts pending review", "Continuity risks", "Compliance flags by school", "Staff continuity risks", "District implementation readiness", "Data protection readiness", "Update data protection readiness", "Update integration readiness", "Caseload overview", "Privacy boundary"]]
+      ["Leadership", ["IEPs due soon", "Overdue progress reports", "Missing service logs", "Drafts pending review", "Continuity risks", "Gap Closure / Readiness", "Daily workflow acceptance", "Working workspace - not the official IEP record", "Compliance flags by school", "Staff continuity risks", "District implementation readiness", "Data protection readiness", "Update data protection readiness", "Update integration readiness", "Caseload overview", "Privacy boundary"]]
     ];
 
     for (const [label, texts] of requiredViews) {

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { initialWorkspace } from "../src/data.js";
+import { initialWorkspace, normalizeWorkspaceStructuredRecords } from "../src/data.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_DATA_DIR = join(__dirname, "..", "data");
@@ -19,7 +19,7 @@ export class WorkspaceStore {
 
   async init({ locked = false } = {}) {
     await mkdir(this.dataDir, { recursive: true });
-    const workspace = await this.readWorkspace().catch(async (error) => {
+    const storedWorkspace = await this.readWorkspace().catch(async (error) => {
       if (error.code !== "ENOENT") throw error;
       const seedWorkspace = async () => {
         const existing = await this.readWorkspace().catch((readError) => {
@@ -34,6 +34,7 @@ export class WorkspaceStore {
       };
       return locked ? seedWorkspace() : this.withWriteLock(seedWorkspace);
     });
+    const workspace = normalizeWorkspaceStructuredRecords(storedWorkspace);
     if (!Array.isArray(workspace.auditLog)) workspace.auditLog = [];
     return workspace;
   }

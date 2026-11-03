@@ -101,11 +101,174 @@ test("returns the seed workspace and verifies the seed audit chain", async (t) =
   assert.equal(workspaceResult.payload.workspace.summaries.parent.sourceAlignment.sourceId, "pa-school-age-iep-non-annotated");
   assert.equal(workspaceResult.payload.workspace.tasks[0].sourceAlignment.jurisdiction, "Pennsylvania");
   assert.equal(workspaceResult.payload.workspace.reviewFlags[0].sourceAlignment.programArea, "School Age");
+  assert.equal(workspaceResult.payload.workspace.gapClosure.version, "FDS-gap-closure-1.0");
+  assert.equal(workspaceResult.payload.workspace.rolePolicyMatrix.length, 0);
+  assert.equal(workspaceResult.payload.workspace.recordLifecycleRules.length, 0);
+  assert.equal(workspaceResult.payload.workspace.officialRecordBoundary.officialSubmission, false);
 
   const verifyResult = await request("/api/audit/verify");
   assert.equal(verifyResult.response.status, 200);
   assert.equal(verifyResult.payload.valid, true);
   assert.ok(verifyResult.payload.checked >= 5);
+});
+
+test("manages gap-closure governance with admin authorization, digests, filtering, and audit evidence", async (t) => {
+  const { request } = await withApi(t);
+
+  const deniedRead = await request("/api/governance/gap-closure", { role: "caseManager" });
+  assert.equal(deniedRead.response.status, 403);
+
+  const governance = await request("/api/governance/gap-closure", { role: "administrator" });
+  assert.equal(governance.response.status, 200);
+  assert.equal(governance.payload.gapClosure.version, "FDS-gap-closure-1.0");
+  assert.equal(governance.payload.rolePolicyMatrix.length, 10);
+  assert.ok(governance.payload.recordLifecycleRules.length >= 6);
+  assert.ok(governance.payload.integrationSources.length >= 6);
+  assert.ok(governance.payload.alertRules.length >= 6);
+  assert.ok(governance.payload.successMetrics.length >= 8);
+  assert.equal(governance.payload.officialRecordBoundary.officialSubmission, false);
+  assert.match(governance.payload.reviewDigest, /^[a-f0-9]{64}$/);
+
+  const deniedUpdate = await request("/api/governance/role-policy", {
+    method: "PATCH",
+    role: "parent",
+    body: {
+      roleId: "parent",
+      studentScope: "Own student",
+      defaultAccess: "Family-visible records",
+      visibleInformation: "Family summary",
+      status: "Policy documented",
+      owner: "Privacy officer",
+      nextReviewDate: "2026-10-01",
+      note: "Family role cannot update governance."
+    }
+  });
+  assert.equal(deniedUpdate.response.status, 403);
+
+  const roleReview = await request("/api/governance/role-policy", {
+    method: "PATCH",
+    role: "districtAdministrator",
+    body: {
+      roleId: "generalEducation",
+      studentScope: "Assigned classes and students only",
+      defaultAccess: "Implement supports and contribute evidence",
+      visibleInformation: "Instructional obligations, accommodations, and relevant summaries",
+      status: "Policy documented",
+      owner: "District privacy officer",
+      nextReviewDate: "2026-10-01",
+      note: "Reviewed least-privilege classroom scope for the district pilot."
+    }
+  });
+  assert.equal(roleReview.response.status, 200);
+  assert.equal(roleReview.payload.updated.studentScope, "Assigned classes and students only");
+  assert.match(roleReview.payload.reviewDigest, /^[a-f0-9]{64}$/);
+  assert.equal(roleReview.payload.latestAuditEvent.title, "Role policy reviewed");
+
+  const lifecycleReview = await request("/api/governance/record-lifecycle", {
+    method: "PATCH",
+    role: "administrator",
+    body: {
+      ruleId: "ai-assisted-content",
+      draftStatus: "Draft - human review required",
+      reviewedStatus: "Human reviewed - approved for export",
+      officialReady: false,
+      exportable: true,
+      requiredReviewRole: "Qualified educator",
+      boundaryLabel: "AI-assisted draft - not official IEP language",
+      status: "Workspace boundary enforced",
+      reviewNote: "Confirmed labels, source references, generation metadata, and approval gating."
+    }
+  });
+  assert.equal(lifecycleReview.response.status, 200);
+  assert.equal(lifecycleReview.payload.updated.exportable, true);
+  assert.equal(lifecycleReview.payload.updated.officialReady, false);
+  assert.match(lifecycleReview.payload.reviewDigest, /^[a-f0-9]{64}$/);
+
+  const integrationReview = await request("/api/governance/integration-sources", {
+    method: "PATCH",
+    role: "administrator",
+    body: {
+      integrationId: "student-information-system",
+      sourceOfTruth: "District roster, enrollment, school, and guardian relationships",
+      direction: "Inbound roster sync",
+      provider: "District SIS pilot mapping",
+      owner: "Data services lead",
+      status: "Readiness review",
+      nextReviewDate: "2026-10-15",
+      boundary: "Pilot mapping only; no live sync or official-record write is enabled.",
+      reviewNote: "Identifier reconciliation and guardian relationship validation remain open."
+    }
+  });
+  assert.equal(integrationReview.response.status, 200);
+  assert.equal(integrationReview.payload.updated.provider, "District SIS pilot mapping");
+
+  const alertReview = await request("/api/governance/alert-rules", {
+    method: "PATCH",
+    role: "administrator",
+    body: {
+      ruleId: "missing-progress",
+      enabled: true,
+      triggerDays: 5,
+      priority: "High",
+      escalationRole: "Case manager and school administrator",
+      status: "Active in local rules",
+      reviewNote: "Pilot will compare this five-day window with teacher alert volume."
+    }
+  });
+  assert.equal(alertReview.response.status, 200);
+  assert.equal(alertReview.payload.updated.triggerDays, 5);
+
+  const metricReview = await request("/api/governance/success-metrics", {
+    method: "PATCH",
+    role: "administrator",
+    body: {
+      metricId: "daily-orientation-time",
+      baseline: "8.5",
+      target: "<= 5",
+      reviewCadence: "Monthly",
+      owner: "Product owner",
+      status: "Measurement design ready",
+      evidenceSource: "Pilot sign-in and first-priority action timestamps",
+      reviewNote: "Baseline definition excludes authentication and network downtime."
+    }
+  });
+  assert.equal(metricReview.response.status, 200);
+  assert.equal(metricReview.payload.updated.baseline, "8.5");
+
+  const districtReview = await request("/api/governance/district-configuration", {
+    method: "PATCH",
+    role: "districtAdministrator",
+    body: {
+      districtId: "riverbend-demo",
+      districtName: "Riverbend School District",
+      jurisdiction: "Pennsylvania",
+      configurationVersion: "RBSD-pilot-2026.10",
+      tenancyMode: "Single-district pilot tenant",
+      dataResidency: "District-approved region pending security review",
+      registryGovernanceStatus: "Pilot registry review scheduled",
+      reviewNote: "District assumptions reviewed for the pilot readiness packet."
+    }
+  });
+  assert.equal(districtReview.response.status, 200);
+  assert.equal(districtReview.payload.updated.configurationVersion, "RBSD-pilot-2026.10");
+  assert.match(districtReview.payload.reviewDigest, /^[a-f0-9]{64}$/);
+
+  const adminWorkspace = await request("/api/workspace", { role: "administrator" });
+  assert.equal(adminWorkspace.payload.workspace.rolePolicyMatrix.find((item) => item.roleId === "generalEducation").studentScope, "Assigned classes and students only");
+  assert.equal(adminWorkspace.payload.workspace.recordLifecycleRules.find((item) => item.id === "ai-assisted-content").exportable, true);
+  assert.equal(adminWorkspace.payload.workspace.gapClosure.reviewHistory.length, 6);
+
+  const parentWorkspace = await request("/api/workspace", { role: "parent" });
+  assert.deepEqual(parentWorkspace.payload.workspace.rolePolicyMatrix, []);
+  assert.deepEqual(parentWorkspace.payload.workspace.recordLifecycleRules, []);
+  assert.deepEqual(parentWorkspace.payload.workspace.integrationSources, []);
+  assert.deepEqual(parentWorkspace.payload.workspace.alertRules, []);
+  assert.deepEqual(parentWorkspace.payload.workspace.successMetrics, []);
+  assert.equal(parentWorkspace.payload.workspace.gapClosure.status, "Restricted to administrator review");
+  assert.equal(parentWorkspace.payload.workspace.officialRecordBoundary.officialSubmission, false);
+
+  const verifyResult = await request("/api/audit/verify", { role: "administrator" });
+  assert.equal(verifyResult.payload.valid, true);
 });
 
 test("requires authenticated sessions and ignores spoofed role headers", async (t) => {
@@ -2208,6 +2371,80 @@ test("records notification delivery with role-aware visibility", async (t) => {
   assert.match(parentWorkspace.payload.workspace.notificationDeliveries[0].message, /progress data reminder/);
 });
 
+test("scopes and records teacher classroom roster reviews", async (t) => {
+  const { request } = await withApi(t);
+
+  const teacherWorkspace = await request("/api/workspace", { role: "generalEducation" });
+  assert.equal(teacherWorkspace.response.status, 200);
+  assert.equal(teacherWorkspace.payload.workspace.students.length, 1);
+  assert.equal(teacherWorkspace.payload.workspace.teacherClassroomRoster.length, 15);
+  assert.ok(
+    teacherWorkspace.payload.workspace.teacherClassroomRoster.every((entry) => entry.teacherUserId === "user-general-education")
+  );
+  assert.equal(teacherWorkspace.payload.workspace.teacherClassroomReviews[0].reviewedCount, 15);
+
+  const parentWorkspace = await request("/api/workspace", { role: "parent" });
+  assert.equal(parentWorkspace.payload.workspace.teacherClassroomRoster.length, 0);
+  assert.equal(parentWorkspace.payload.workspace.teacherClassroomReviews.length, 0);
+
+  const deniedParentReview = await request("/api/classroom-roster/reviews", {
+    method: "POST",
+    role: "parent",
+    body: {
+      classPeriod: "Period 2 ELA",
+      reviewFocus: "Weekly accommodation scan",
+      reviewedRosterIds: ["classroom-roster-001"],
+      actionPlan: "Parent users cannot review teacher classroom rosters.",
+      followUpDate: "2026-07-02"
+    }
+  });
+  assert.equal(deniedParentReview.response.status, 403);
+
+  const deniedReadOnlyReview = await request("/api/classroom-roster/reviews", {
+    method: "POST",
+    role: "readOnlyReviewer",
+    body: {
+      classPeriod: "Period 2 ELA",
+      reviewFocus: "Weekly accommodation scan",
+      reviewedRosterIds: ["classroom-roster-001"],
+      actionPlan: "Read-only reviewers cannot create classroom roster reviews.",
+      followUpDate: "2026-07-02"
+    }
+  });
+  assert.equal(deniedReadOnlyReview.response.status, 403);
+
+  const reviewedRosterIds = teacherWorkspace.payload.workspace.teacherClassroomRoster.map((entry) => entry.id);
+  const review = await request("/api/classroom-roster/reviews", {
+    method: "POST",
+    role: "generalEducation",
+    body: {
+      classPeriod: "Period 2 ELA",
+      reviewFocus: "Progress evidence check",
+      reviewedRosterIds,
+      actionPlan:
+        "Verify high-priority assessment supports, collect overdue progress checks, and coordinate service carryover before Friday.",
+      followUpDate: "2026-07-02"
+    }
+  });
+  assert.equal(review.response.status, 201);
+  assert.equal(review.payload.reviewedCount, 15);
+  assert.equal(review.payload.highPriorityCount, 5);
+  assert.equal(review.payload.reviewedBy, "Leah Kim");
+  assert.equal(review.payload.reviewedByRole, "generalEducation");
+  assert.match(review.payload.reviewDigest, /^[a-f0-9]{64}$/);
+  assert.match(review.payload.sourceBoundary, /official IEP records remain the controlling source/);
+  assert.equal(review.payload.workspace.teacherClassroomReviews[0].id, review.payload.id);
+  assert.equal(review.payload.workspace.auditLog[0].title, "Classroom roster reviewed");
+  assert.ok(review.payload.workspace.teacherClassroomRoster.every((entry) => entry.lastReviewedAt === review.payload.reviewedAt));
+
+  const readOnlyWorkspace = await request("/api/workspace", { role: "readOnlyReviewer" });
+  assert.equal(readOnlyWorkspace.payload.workspace.teacherClassroomRoster.length, 15);
+  assert.ok(readOnlyWorkspace.payload.workspace.teacherClassroomReviews.some((item) => item.id === review.payload.id));
+
+  const verifyResult = await request("/api/audit/verify", { role: "generalEducation" });
+  assert.equal(verifyResult.payload.valid, true);
+});
+
 test("allows family and student meeting prep input with staff-only responses", async (t) => {
   const { request } = await withApi(t);
 
@@ -2877,6 +3114,11 @@ test("preserves draft section version history while blocking family revisions", 
   });
   assert.equal(created.response.status, 201);
   assert.equal(created.payload.status, "Draft - human review required");
+  assert.equal(created.payload.reviewStatus, "Human review pending");
+  assert.equal(created.payload.contentLabel, "AI-assisted fictional training draft");
+  assert.ok(created.payload.sourceReferences.length >= 3);
+  assert.equal(created.payload.generationMetadata.modelProfile, "Local deterministic demo");
+  assert.equal(created.payload.officialRecordBoundary.officialSubmission, false);
   assert.equal(created.payload.guidedResponses.familyPriority, "Family wants supports that work across content classes.");
   assert.match(created.payload.annotatedSample, /Annotated sample/);
   const sectionIds = created.payload.sections.map((section) => section.id);
@@ -2970,6 +3212,8 @@ test("preserves draft section version history while blocking family revisions", 
   const firstApproval = await request(`/api/drafts/${created.payload.id}/approve`, { method: "POST" });
   assert.equal(firstApproval.response.status, 200);
   assert.equal(firstApproval.payload.status, "Approved for export");
+  assert.equal(firstApproval.payload.reviewStatus, "Human reviewed - approved for export");
+  assert.ok(firstApproval.payload.sections.every((section) => section.reviewStatus === "Human reviewed - approved for export"));
   assert.equal(firstApproval.payload.approvedBy, "BJ Tarves");
   assert.equal(firstApproval.payload.workspace.auditLog[0].title, "Draft package approved");
 
@@ -3007,6 +3251,19 @@ test("preserves draft section version history while blocking family revisions", 
   assert.equal(approved.payload.approvedBy, "BJ Tarves");
   assert.equal(approved.payload.sections.find((section) => section.id === "measurable-goal").version, 3);
 
+  const missingMetadata = structuredClone(approved.payload);
+  delete missingMetadata.sourceReferences;
+  const metadataDenied = await request("/api/exports", {
+    method: "POST",
+    body: {
+      label: "Draft training IEP sections",
+      format: "docx",
+      payload: missingMetadata
+    }
+  });
+  assert.equal(metadataDenied.response.status, 400);
+  assert.match(metadataDenied.payload.message, /source reference/i);
+
   const exported = await request("/api/exports", {
     method: "POST",
     body: {
@@ -3017,6 +3274,9 @@ test("preserves draft section version history while blocking family revisions", 
   });
   assert.equal(exported.response.status, 201);
   assert.match(exported.payload.artifact.fileName, /^draft-training-iep-sections-.*\.docx$/);
+  assert.equal(exported.payload.officialSubmission, false);
+  assert.equal(exported.payload.officialReady, false);
+  assert.match(exported.payload.lifecycleLabel, /district review required/);
 
   const verifyResult = await request("/api/audit/verify");
   assert.equal(verifyResult.payload.valid, true);

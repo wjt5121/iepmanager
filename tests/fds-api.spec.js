@@ -101,6 +101,42 @@ test.describe("API-backed workspace integration", () => {
     await expect(page.locator(".question-row").filter({ hasText: "overdue progress reminder" })).toBeVisible();
   });
 
+  test("persists teacher classroom roster review from the overview", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "API-backed classroom roster coverage runs on desktop.");
+    await reset(page);
+
+    await page.locator(".role-control select").selectOption("generalEducation");
+    await expectToast(page, "Account switched");
+    await expect(page.getByRole("heading", { name: "Good morning, Leah." })).toBeVisible();
+
+    const classroomCard = page.locator(".card").filter({ hasText: "Classroom management" });
+    await expect(classroomCard).toContainText("15 students");
+    await expect(classroomCard).toContainText("Jordan Lee");
+    await expect(classroomCard).toContainText("Elise Brown");
+    await expect(classroomCard).toContainText("5 high priority");
+    await classroomCard.getByLabel("Classroom review focus").selectOption("Progress evidence check");
+    await classroomCard.getByLabel("Classroom action plan").fill(
+      "Verify assessment accommodations, collect overdue progress checks, and coordinate service carryover before Friday."
+    );
+    await classroomCard.getByRole("button", { name: "Record classroom roster review" }).click();
+    await expectToast(page, "Classroom roster reviewed");
+    await expect(classroomCard).toContainText("Progress evidence check");
+
+    const apiWorkspace = await page.evaluate(async (apiBaseUrl) => {
+      const session = JSON.parse(localStorage.getItem("iep-auth-session-v1"));
+      const response = await fetch(`${apiBaseUrl}/api/workspace`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      return (await response.json()).workspace;
+    }, API_BASE_URL);
+    expect(apiWorkspace.user.role).toBe("generalEducation");
+    expect(apiWorkspace.teacherClassroomRoster).toHaveLength(15);
+    expect(apiWorkspace.teacherClassroomReviews[0].reviewFocus).toBe("Progress evidence check");
+    expect(apiWorkspace.teacherClassroomReviews[0].reviewedCount).toBe(15);
+    expect(apiWorkspace.teacherClassroomReviews[0].reviewDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(apiWorkspace.auditLog[0].title).toBe("Classroom roster reviewed");
+  });
+
   test("persists team collaboration comments from the student workspace", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "API-backed team collaboration coverage runs on desktop.");
     await reset(page);
@@ -2214,6 +2250,69 @@ test.describe("API-backed workspace integration", () => {
     expect(resolved.resolvedBy).toBe("BJ Tarves");
     expect(resolved.decision).toContain("Recovery minutes");
     expect(apiWorkspace.auditLog[0].title).toBe("Decision record updated");
+  });
+
+  test("manages gap-closure readiness from Leadership with role-aware filtering", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop", "Gap-closure governance coverage runs on desktop.");
+    await reset(page);
+
+    await page.locator(".role-control select").selectOption("administrator");
+    await expectToast(page, "Account switched");
+    await nav(page, "Leadership");
+
+    const panel = page.getByTestId("gap-closure-panel");
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText("Gap Closure / Readiness");
+    await expect(panel).toContainText("Daily workflow acceptance");
+    await expect(panel).toContainText("Working workspace - not the official IEP record");
+    await expect(panel).toContainText("6/6");
+    await expect(panel).toContainText("10");
+
+    await panel.getByRole("tab", { name: "Roles & records" }).click();
+    await expect(panel).toContainText("Special education teacher / case manager");
+    await expect(panel).toContainText("AI-assisted draft - not official IEP language");
+    const roleEditor = page.getByTestId("role-policy-editor");
+    await roleEditor.getByLabel("Review role policy record").selectOption("generalEducation");
+    await roleEditor.getByLabel("Student scope").fill("Assigned classes and students only");
+    await roleEditor.getByLabel("Review note").fill("Leadership confirmed least-privilege classroom scope for the pilot.");
+    await roleEditor.getByRole("button", { name: "Save role review" }).click();
+    await expectToast(page, "Review role policy saved");
+
+    await panel.getByRole("tab", { name: "Alerts & metrics" }).click();
+    await expect(panel).toContainText("Annual review deadline");
+    await expect(panel).toContainText("Daily orientation time");
+    await expect(panel).toContainText("Critical · 30 day window");
+    const alertEditor = page.getByTestId("alert-rule-editor");
+    await alertEditor.getByLabel("Review alert rule record").selectOption("missing-progress");
+    await alertEditor.getByLabel("Trigger window (days)").fill("5");
+    await alertEditor.getByLabel("Review note").fill("Pilot alert window reviewed against expected teacher volume.");
+    await alertEditor.getByRole("button", { name: "Save alert review" }).click();
+    await expectToast(page, "Review alert rule saved");
+
+    const adminWorkspace = await page.evaluate(async (apiBaseUrl) => {
+      const session = JSON.parse(localStorage.getItem("iep-auth-session-v1"));
+      const response = await fetch(`${apiBaseUrl}/api/workspace`, {
+        headers: { authorization: `Bearer ${session.token}` }
+      });
+      return (await response.json()).workspace;
+    }, API_BASE_URL);
+    expect(adminWorkspace.rolePolicyMatrix.find((item) => item.roleId === "generalEducation").studentScope).toBe(
+      "Assigned classes and students only"
+    );
+    expect(adminWorkspace.alertRules.find((item) => item.id === "missing-progress").triggerDays).toBe(5);
+    expect(adminWorkspace.gapClosure.reviewHistory).toHaveLength(2);
+    expect(adminWorkspace.gapClosure.latestReviewDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(adminWorkspace.auditLog[0].title).toBe("Alert prioritization rule reviewed");
+
+    await page.locator(".role-control select").selectOption("parent");
+    await expectToast(page, "Account switched");
+    await nav(page, "Leadership");
+    await expect(panel).toContainText("Working workspace - not the official IEP record");
+    await expect(panel).toContainText("Detailed readiness policy is restricted to administrator governance roles");
+    await expect(panel).toContainText("Roles documented");
+    await panel.getByRole("tab", { name: "Roles & records" }).click();
+    await expect(panel).toContainText("Detailed governance records are restricted to authorized administrators");
+    await expect(panel).not.toContainText("Assigned classes and students only");
   });
 
   test("downloads server-generated DOCX and PDF report exports from the UI", async ({ page }, testInfo) => {

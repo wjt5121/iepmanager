@@ -1,6 +1,6 @@
 import { createServer as createHttpServer } from "node:http";
 import { createHash, randomUUID } from "node:crypto";
-import { DemoAuth, filterWorkspaceForUser, requireStudentAccess } from "./auth.js";
+import { DemoAuth, canAccessClassroomRosterEntry, filterWorkspaceForUser, requireStudentAccess } from "./auth.js";
 import { extractDocumentText } from "./documentText.js";
 import { createExportArtifact } from "./exportArtifacts.js";
 import { extractSections } from "./extraction.js";
@@ -10,6 +10,7 @@ import {
   applyApprovedExtractionObligations,
   generateCompletenessReviewFlags,
   mergeExtractionSectionsIntoStructuredRecord,
+  normalizeGapClosureWorkspace,
   normalizeStructuredIepRecord,
   refreshRoleSummariesFromWorkspace,
   schemaSections,
@@ -89,6 +90,45 @@ const iepAutoDiffSectionConfigs = [
   }
 ];
 
+const gapClosurePatchRoutes = {
+  "/api/governance/role-policy": {
+    permission: "manageRolePolicy",
+    type: "Gap closure governance",
+    title: "Role policy reviewed",
+    subjectField: "roleId"
+  },
+  "/api/governance/record-lifecycle": {
+    permission: "manageRecordLifecycle",
+    type: "Gap closure governance",
+    title: "Record lifecycle rule reviewed",
+    subjectField: "ruleId"
+  },
+  "/api/governance/alert-rules": {
+    permission: "manageAlertRules",
+    type: "Gap closure governance",
+    title: "Alert prioritization rule reviewed",
+    subjectField: "ruleId"
+  },
+  "/api/governance/success-metrics": {
+    permission: "manageSuccessMetrics",
+    type: "Gap closure governance",
+    title: "Success metric reviewed",
+    subjectField: "metricId"
+  },
+  "/api/governance/integration-sources": {
+    permission: "manageDistrictConfiguration",
+    type: "Gap closure governance",
+    title: "Integration source reviewed",
+    subjectField: "integrationId"
+  },
+  "/api/governance/district-configuration": {
+    permission: "manageDistrictConfiguration",
+    type: "Gap closure governance",
+    title: "District governance configuration reviewed",
+    subjectField: "districtId"
+  }
+};
+
 export function createApiServer({ store = new WorkspaceStore(), auth = new DemoAuth(), enableTestReset = false } = {}) {
   return createHttpServer(async (request, response) => {
     try {
@@ -129,6 +169,39 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
           role,
           user
         });
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname === "/api/governance/gap-closure") {
+        requirePermission(role, "manageGapClosure");
+        const workspace = normalizeGapClosureWorkspace(await store.init());
+        const snapshot = gapClosureSnapshot(workspace);
+        await sendJson(response, 200, {
+          ...snapshot,
+          reviewDigest: createGapClosureSnapshotDigest(snapshot),
+          workspace: workspaceForResponse(workspace, user, auth, session)
+        });
+        return;
+      }
+
+      const gapClosurePatch = gapClosurePatchRoutes[url.pathname];
+      if (request.method === "PATCH" && gapClosurePatch) {
+        requirePermission(role, gapClosurePatch.permission);
+        const body = await readJson(request);
+        const reviewedAt = new Date().toISOString();
+        const subjectId = String(body[gapClosurePatch.subjectField] || user.districtId || "gap-closure").trim();
+        const result = await store.mutate(
+          (workspace) => applyGapClosurePatch(workspace, url.pathname, body, { actor, role, reviewedAt }),
+          {
+            type: gapClosurePatch.type,
+            title: gapClosurePatch.title,
+            detail: `${subjectId || "Gap closure record"} was reviewed by ${actor}.`,
+            actor,
+            role,
+            subjectId: subjectId || "gap-closure"
+          }
+        );
+        await sendJson(response, 200, mutationPayload(result, user));
         return;
       }
 
@@ -1623,6 +1696,7 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
               moderatedAt: "",
               moderationDigest: "",
               replies: [],
+              recordLifecycle: workingRecordLifecycle("Communication record"),
               officialRecordImpact:
                 "Team collaboration note only; does not change official IEP obligations."
             };
@@ -1922,7 +1996,8 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
           enteredBy: actor,
           evidenceDocumentId: body.evidenceDocumentId || null,
           evidenceLabel: String(body.evidenceLabel || "").trim(),
-          evidenceType: String(body.evidenceType || "").trim()
+          evidenceType: String(body.evidenceType || "").trim(),
+          recordLifecycle: workingRecordLifecycle("Progress evidence")
         };
         const result = await store.mutate(
           (workspace) => {
@@ -1970,7 +2045,8 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
               updated = {
                 ...service,
                 deliveredMinutes,
-                recoveryStatus: deliveredMinutes >= service.scheduledMinutes ? "On schedule" : service.recoveryStatus
+                recoveryStatus: deliveredMinutes >= service.scheduledMinutes ? "On schedule" : service.recoveryStatus,
+                recordLifecycle: workingRecordLifecycle("Service documentation")
               };
               return updated;
             });
@@ -2724,7 +2800,8 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
           assignedTo: "IEP team",
           submittedBy: actor,
           submittedByRole: role,
-          submittedAt: new Date().toISOString()
+          submittedAt: new Date().toISOString(),
+          recordLifecycle: workingRecordLifecycle("Meeting preparation")
         };
         const result = await store.mutate(
           (workspace) => {
@@ -3778,12 +3855,22 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
           guidedResponses,
           annotatedSample,
           status: "Draft - human review required",
+          reviewStatus: "Human review pending",
+          contentLabel: "AI-assisted fictional training draft",
+          sourceReferences: ["Fictional learner profile", "Guided intake responses", "Annotated sample cue"],
+          generationMetadata: generatedContentMetadata(actor, role, createdAt),
+          officialRecordBoundary: generatedContentBoundary(),
           createdBy: actor,
           createdByRole: role,
           createdAt,
           sections: draftSeedSections(body.profile || "", guidedResponses, annotatedSample).map((section) => ({
             ...section,
             status: "Draft - human review required",
+            reviewStatus: "Human review pending",
+            contentLabel: "AI-assisted fictional training draft section",
+            sourceReferences: ["Fictional learner profile", "Guided intake responses", "Annotated sample cue"],
+            generationMetadata: generatedContentMetadata(actor, role, createdAt),
+            officialRecordBoundary: generatedContentBoundary(),
             version: 1,
             versionHistory: []
           }))
@@ -3817,9 +3904,19 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
             workspace.draft = {
               ...workspace.draft,
               status: "Approved for export",
+              reviewStatus: "Human reviewed - approved for export",
               approvedBy: actor,
               approvedByRole: role,
-              approvedAt
+              approvedAt,
+              sections: (workspace.draft.sections || []).map((section) => ({
+                ...section,
+                reviewStatus: "Human reviewed - approved for export",
+                humanReviewMetadata: {
+                  reviewedBy: actor,
+                  reviewedByRole: role,
+                  reviewedAt: approvedAt
+                }
+              }))
             };
             return workspace.draft;
           },
@@ -3850,6 +3947,7 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
             workspace.draft = {
               ...workspace.draft,
               status: "Regenerated - human review required",
+              reviewStatus: "Human review pending",
               approvedBy: null,
               approvedByRole: null,
               approvedAt: null,
@@ -3890,6 +3988,7 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
             workspace.draft = {
               ...workspace.draft,
               status: "Revised - human review required",
+              reviewStatus: "Human review pending",
               approvedBy: null,
               approvedByRole: null,
               approvedAt: null,
@@ -4003,13 +4102,80 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
         return;
       }
 
+      if (request.method === "POST" && url.pathname === "/api/classroom-roster/reviews") {
+        requirePermission(role, "reviewClassroomRoster");
+        const body = await readJson(request);
+        const classPeriod = requiredString(body.classPeriod, "Class period");
+        const reviewFocus = requiredString(body.reviewFocus || "Classroom support review", "Review focus");
+        const actionPlan = requiredString(body.actionPlan, "Classroom action plan");
+        const followUpDate = String(body.followUpDate || "").trim();
+        const reviewedRosterIds = Array.from(
+          new Set((Array.isArray(body.reviewedRosterIds) ? body.reviewedRosterIds : []).map((id) => String(id || "").trim()).filter(Boolean))
+        );
+        if (!reviewedRosterIds.length) throw badRequest("At least one classroom roster row must be reviewed.");
+        const reviewedAt = new Date().toISOString();
+
+        const result = await store.mutate(
+          (workspace) => {
+            const visibleStudentIds = user.studentIds?.includes("*")
+              ? (workspace.students || []).map((student) => student.id)
+              : (workspace.students || []).filter((student) => user.studentIds?.includes(student.id)).map((student) => student.id);
+            const visibleSet = new Set(visibleStudentIds);
+            const visibleRoster = (workspace.teacherClassroomRoster || []).filter((entry) =>
+              entry.classPeriod === classPeriod && canAccessClassroomRosterEntry(user, entry, visibleSet)
+            );
+            const visibleRosterById = new Map(visibleRoster.map((entry) => [entry.id, entry]));
+            const selectedRows = reviewedRosterIds.map((id) => visibleRosterById.get(id)).filter(Boolean);
+            if (selectedRows.length !== reviewedRosterIds.length) {
+              throw forbidden("Classroom roster review includes a row outside the user's visible classroom scope.");
+            }
+            const selectedIds = new Set(selectedRows.map((row) => row.id));
+            const highPriorityCount = selectedRows.filter((row) => row.priority === "High").length;
+            const review = {
+              id: `classroom-review-${randomUUID()}`,
+              teacherUserId: selectedRows[0]?.teacherUserId || user.id,
+              teacherName: selectedRows[0]?.teacherName || actor,
+              classPeriod,
+              reviewFocus,
+              reviewedRosterIds: selectedRows.map((row) => row.id),
+              reviewedCount: selectedRows.length,
+              highPriorityCount,
+              actionPlan,
+              followUpDate,
+              sourceBoundary:
+                "Classroom review summarizes teacher-facing implementation supports only; linked official IEP records remain the controlling source.",
+              reviewedBy: actor,
+              reviewedByRole: role,
+              reviewedByUserId: user.id,
+              reviewedAt
+            };
+            review.reviewDigest = createClassroomRosterReviewDigest(review, selectedRows, workspace);
+            workspace.teacherClassroomRoster = (workspace.teacherClassroomRoster || []).map((entry) =>
+              selectedIds.has(entry.id) ? { ...entry, lastReviewedAt: reviewedAt } : entry
+            );
+            workspace.teacherClassroomReviews = [review, ...(workspace.teacherClassroomReviews || [])];
+            return review;
+          },
+          {
+            type: "Classroom roster review",
+            title: "Classroom roster reviewed",
+            detail: `${classPeriod} roster reviewed for ${reviewFocus}.`,
+            actor,
+            role,
+            subjectId: classPeriod
+          }
+        );
+        await sendJson(response, 201, mutationPayload(result, user));
+        return;
+      }
+
       if (request.method === "POST" && url.pathname === "/api/exports") {
         requirePermission(role, "export");
         const body = await readJson(request);
-        ensureDraftExportApproved(body);
         const exportId = `export-${randomUUID()}`;
         const createdAt = new Date().toISOString();
         const workspace = await store.init();
+        ensureExportLifecycleReady(body, workspace);
         const payload = isDistrictSystemExport(body)
           ? createDistrictSystemExportPayload(body.payload, workspace, user, createdAt)
           : body.payload ?? null;
@@ -4026,6 +4192,11 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
           label: body.label || "Structured export",
           createdAt,
           format: artifact.format,
+          officialSubmission: false,
+          officialReady: isDistrictImportReviewReady(body, workspace),
+          lifecycleLabel: "Workspace export - district review required",
+          officialRecordBoundary: workspace.officialRecordBoundary?.controllingSource ||
+            "The district-approved IEP and district systems remain controlling.",
           payloadSummary: artifact.summary,
           artifact: {
             fileName: artifact.fileName,
@@ -4138,6 +4309,244 @@ export async function startServer({ port = process.env.PORT || 8787, store, auth
   return server;
 }
 
+function gapClosureSnapshot(workspace = {}) {
+  const normalized = normalizeGapClosureWorkspace(workspace);
+  return {
+    gapClosure: normalized.gapClosure,
+    rolePolicyMatrix: normalized.rolePolicyMatrix,
+    recordLifecycleRules: normalized.recordLifecycleRules,
+    integrationSources: normalized.integrationSources,
+    alertRules: normalized.alertRules,
+    successMetrics: normalized.successMetrics,
+    officialRecordBoundary: normalized.officialRecordBoundary
+  };
+}
+
+function createGapClosureSnapshotDigest(snapshot) {
+  return createHash("sha256").update(JSON.stringify(snapshot)).digest("hex");
+}
+
+function applyGapClosurePatch(workspace, path, body, context) {
+  Object.assign(workspace, normalizeGapClosureWorkspace(workspace));
+  switch (path) {
+    case "/api/governance/role-policy":
+      return updateGapClosureCollection(
+        workspace,
+        "rolePolicyMatrix",
+        "roleId",
+        requiredString(body.roleId, "Role policy"),
+        {
+          studentScope: requiredString(body.studentScope, "Student scope"),
+          defaultAccess: requiredString(body.defaultAccess, "Default access"),
+          visibleInformation: requiredString(body.visibleInformation, "Visible information"),
+          status: requiredString(body.status, "Role policy status"),
+          owner: requiredString(body.owner, "Role policy owner"),
+          nextReviewDate: requiredDate(body.nextReviewDate, "Role policy next review date"),
+          note: requiredString(body.note, "Role policy review note")
+        },
+        "Role policy",
+        context
+      );
+    case "/api/governance/record-lifecycle":
+      return updateGapClosureCollection(
+        workspace,
+        "recordLifecycleRules",
+        "id",
+        requiredString(body.ruleId, "Record lifecycle rule"),
+        {
+          draftStatus: requiredString(body.draftStatus, "Draft status"),
+          reviewedStatus: requiredString(body.reviewedStatus, "Reviewed status"),
+          officialReady: requiredBoolean(body.officialReady, "Official-ready decision"),
+          exportable: requiredBoolean(body.exportable, "Exportable decision"),
+          requiredReviewRole: requiredString(body.requiredReviewRole, "Required review role"),
+          boundaryLabel: requiredString(body.boundaryLabel, "Boundary label"),
+          status: requiredString(body.status, "Lifecycle status"),
+          reviewNote: requiredString(body.reviewNote, "Lifecycle review note")
+        },
+        "Record lifecycle",
+        context
+      );
+    case "/api/governance/alert-rules":
+      return updateGapClosureCollection(
+        workspace,
+        "alertRules",
+        "id",
+        requiredString(body.ruleId, "Alert rule"),
+        {
+          enabled: requiredBoolean(body.enabled, "Alert enabled decision"),
+          triggerDays: requiredInteger(body.triggerDays, "Alert trigger days", 0, 365),
+          priority: requiredString(body.priority, "Alert priority"),
+          escalationRole: requiredString(body.escalationRole, "Alert escalation role"),
+          status: requiredString(body.status, "Alert rule status"),
+          reviewNote: requiredString(body.reviewNote, "Alert rule review note")
+        },
+        "Alert prioritization",
+        context
+      );
+    case "/api/governance/success-metrics":
+      return updateGapClosureCollection(
+        workspace,
+        "successMetrics",
+        "id",
+        requiredString(body.metricId, "Success metric"),
+        {
+          baseline: requiredString(body.baseline, "Metric baseline"),
+          target: requiredString(body.target, "Metric target"),
+          reviewCadence: requiredString(body.reviewCadence, "Metric review cadence"),
+          owner: requiredString(body.owner, "Metric owner"),
+          status: requiredString(body.status, "Metric status"),
+          evidenceSource: requiredString(body.evidenceSource, "Metric evidence source"),
+          reviewNote: requiredString(body.reviewNote, "Metric review note")
+        },
+        "Success metric",
+        context
+      );
+    case "/api/governance/integration-sources":
+      return updateGapClosureCollection(
+        workspace,
+        "integrationSources",
+        "id",
+        requiredString(body.integrationId, "Integration source"),
+        {
+          sourceOfTruth: requiredString(body.sourceOfTruth, "Integration source of truth"),
+          direction: requiredString(body.direction, "Integration direction"),
+          provider: requiredString(body.provider, "Integration provider"),
+          owner: requiredString(body.owner, "Integration owner"),
+          status: requiredString(body.status, "Integration status"),
+          nextReviewDate: requiredDate(body.nextReviewDate, "Integration next review date"),
+          boundary: requiredString(body.boundary, "Integration boundary"),
+          reviewNote: requiredString(body.reviewNote, "Integration review note")
+        },
+        "Integration source",
+        context
+      );
+    case "/api/governance/district-configuration":
+      return updateGapClosureDistrictConfiguration(workspace, body, context);
+    default:
+      throw notFound("Gap closure governance route not found.");
+  }
+}
+
+function updateGapClosureCollection(workspace, collectionKey, idField, subjectId, changes, reviewType, context) {
+  const collection = workspace[collectionKey] || [];
+  const existing = collection.find((item) => item[idField] === subjectId);
+  if (!existing) throw notFound(`${reviewType} record not found.`);
+  const reviewed = {
+    ...existing,
+    ...changes,
+    reviewedBy: context.actor,
+    reviewedByRole: context.role,
+    reviewedAt: context.reviewedAt
+  };
+  const review = {
+    id: `gap-review-${randomUUID()}`,
+    reviewType,
+    subjectId,
+    subjectLabel: existing.roleLabel || existing.name || subjectId,
+    status: reviewed.status,
+    changedFields: Object.keys(changes),
+    reviewNote: changes.reviewNote || changes.note || "Governance record reviewed.",
+    reviewedBy: context.actor,
+    reviewedByRole: context.role,
+    reviewedAt: context.reviewedAt,
+    reviewedValue: reviewed
+  };
+  const reviewDigest = createGapClosureSnapshotDigest(review);
+  const updated = { ...reviewed, reviewDigest };
+  const completedReview = { ...review, reviewDigest };
+  workspace[collectionKey] = collection.map((item) => (item[idField] === subjectId ? updated : item));
+  recordGapClosureReview(workspace, completedReview, context);
+  return { updated, review: completedReview, reviewDigest };
+}
+
+function updateGapClosureDistrictConfiguration(workspace, body, context) {
+  const configuration = workspace.districtConfiguration || {};
+  const districtId = String(body.districtId || configuration.districtId || "").trim();
+  if (!districtId || districtId !== configuration.districtId) {
+    throw badRequest("District configuration must target the active district.");
+  }
+  const updated = {
+    ...configuration,
+    districtName: requiredString(body.districtName, "District name"),
+    jurisdiction: requiredString(body.jurisdiction, "District jurisdiction"),
+    configurationVersion: requiredString(body.configurationVersion, "Configuration version"),
+    tenancyMode: requiredString(body.tenancyMode, "Tenancy mode"),
+    dataResidency: requiredString(body.dataResidency, "Data residency"),
+    registryGovernanceStatus: requiredString(body.registryGovernanceStatus, "Registry governance status"),
+    lastReviewedBy: context.actor,
+    lastReviewedAt: context.reviewedAt
+  };
+  const review = {
+    id: `gap-review-${randomUUID()}`,
+    reviewType: "District governance configuration",
+    subjectId: districtId,
+    subjectLabel: updated.districtName,
+    status: updated.registryGovernanceStatus,
+    changedFields: [
+      "districtName",
+      "jurisdiction",
+      "configurationVersion",
+      "tenancyMode",
+      "dataResidency",
+      "registryGovernanceStatus"
+    ],
+    reviewNote: requiredString(body.reviewNote, "District configuration review note"),
+    reviewedBy: context.actor,
+    reviewedByRole: context.role,
+    reviewedAt: context.reviewedAt,
+    reviewedValue: {
+      districtId,
+      districtName: updated.districtName,
+      jurisdiction: updated.jurisdiction,
+      configurationVersion: updated.configurationVersion,
+      tenancyMode: updated.tenancyMode,
+      dataResidency: updated.dataResidency,
+      registryGovernanceStatus: updated.registryGovernanceStatus
+    }
+  };
+  const reviewDigest = createGapClosureSnapshotDigest(review);
+  const completedReview = { ...review, reviewDigest };
+  workspace.districtConfiguration = {
+    ...updated,
+    governanceReviewDigest: reviewDigest,
+    configurationReviews: [completedReview, ...(updated.configurationReviews || [])]
+  };
+  recordGapClosureReview(workspace, completedReview, context);
+  return { updated: workspace.districtConfiguration, review: completedReview, reviewDigest };
+}
+
+function recordGapClosureReview(workspace, review, context) {
+  workspace.gapClosure = {
+    ...(workspace.gapClosure || {}),
+    status: "In readiness review",
+    lastReviewedBy: context.actor,
+    lastReviewedAt: context.reviewedAt,
+    latestReviewDigest: review.reviewDigest,
+    reviewHistory: [review, ...(workspace.gapClosure?.reviewHistory || [])]
+  };
+}
+
+function requiredBoolean(value, label) {
+  if (typeof value !== "boolean") throw badRequest(`${label} is required.`);
+  return value;
+}
+
+function requiredInteger(value, label, min, max) {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < min || number > max) {
+    throw badRequest(`${label} must be an integer between ${min} and ${max}.`);
+  }
+  return number;
+}
+
+function requiredDate(value, label) {
+  const date = requiredString(value, label);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00`))) {
+    throw badRequest(`${label} must be a valid date.`);
+  }
+  return date;
+}
+
 async function readJson(request) {
   const chunks = [];
   for await (const chunk of request) chunks.push(chunk);
@@ -4169,10 +4578,11 @@ function setCors(response) {
 
 function mutationPayload({ result, workspace }, user) {
   const visibleWorkspace = user ? filterWorkspaceForUser(workspace, user) : workspace;
+  const latestAuditEvent = visibleWorkspace.auditLog?.[0] || null;
   if (result && typeof result === "object" && !Array.isArray(result)) {
-    return { ...result, workspace: visibleWorkspace };
+    return { ...result, latestAuditEvent, workspace: visibleWorkspace };
   }
-  return { result, workspace: visibleWorkspace };
+  return { result, latestAuditEvent, workspace: visibleWorkspace };
 }
 
 function workspaceForResponse(workspace, user, auth, session) {
@@ -4300,6 +4710,30 @@ function createExportTemplateReviewDigest(review, configuration = {}) {
       mappingEvidence: review.mappingEvidence,
       validationEvidence: review.validationEvidence,
       reviewNote: review.reviewNote,
+      reviewedByUserId: review.reviewedByUserId,
+      reviewedAt: review.reviewedAt
+    }))
+    .digest("hex");
+}
+
+function createClassroomRosterReviewDigest(review, rosterRows = [], workspace = {}) {
+  return createHash("sha256")
+    .update(JSON.stringify({
+      districtId: workspace.districtConfiguration?.districtId || "local-district",
+      teacherUserId: review.teacherUserId,
+      classPeriod: review.classPeriod,
+      reviewFocus: review.reviewFocus,
+      reviewedRosterIds: review.reviewedRosterIds,
+      reviewedRows: rosterRows.map((row) => ({
+        id: row.id,
+        linkedStudentId: row.linkedStudentId || "",
+        priority: row.priority,
+        iepStatus: row.iepStatus,
+        supportSummary: row.supportSummary,
+        nextAction: row.nextAction
+      })),
+      actionPlan: review.actionPlan,
+      followUpDate: review.followUpDate,
       reviewedByUserId: review.reviewedByUserId,
       reviewedAt: review.reviewedAt
     }))
@@ -4804,6 +5238,7 @@ function reviseDraftSection(section, body, actor, revisedAt) {
     ...section,
     content: String(body.content || "").trim(),
     status: "Revised - human review required",
+    reviewStatus: "Human review pending",
     version: previousVersion + 1,
     revisionNote,
     reviewedBy: actor.name,
@@ -4829,6 +5264,7 @@ function regenerateDraftSection(section, profile, body, actor, regeneratedAt) {
     ...section,
     content: regeneratedDraftContent(section, profile, guidance),
     status: "Regenerated - human review required",
+    reviewStatus: "Human review pending",
     version: previousVersion + 1,
     revisionNote: guidance,
     regenerationGuidance: guidance,
@@ -4875,7 +5311,7 @@ function regeneratedDraftContent(section, profile, guidance) {
   return `Regenerated from profile: ${profileText} ${sectionPrompts[draftSectionKey(section)] || "Draft review language for this section with source evidence and team confirmation steps."} Reviewer guidance: ${guidance}`;
 }
 
-function ensureDraftExportApproved(body) {
+function ensureExportLifecycleReady(body, workspace = {}) {
   const payload = body.payload;
   const isDraftIepPackage =
     /draft training iep sections/i.test(body.label || "") ||
@@ -4883,6 +5319,72 @@ function ensureDraftExportApproved(body) {
   if (isDraftIepPackage && payload?.status !== "Approved for export") {
     throw badRequest("Draft section packages require human approval before export.");
   }
+  if (isDraftIepPackage) {
+    ensureGeneratedContentMetadata(payload, "Draft package");
+    if (payload.reviewStatus !== "Human reviewed - approved for export") {
+      throw badRequest("Draft section packages require a recorded human-review status before export.");
+    }
+    for (const section of payload.sections || []) {
+      ensureGeneratedContentMetadata(section, `Draft section ${section.heading || section.id || "unknown"}`);
+      if (section.reviewStatus !== "Human reviewed - approved for export") {
+        throw badRequest("Every generated draft section requires human review before export.");
+      }
+    }
+  }
+  if (payload?.generationMetadata || payload?.contentLabel) {
+    ensureGeneratedContentMetadata(payload, "Generated export content");
+  }
+  if (isDistrictSystemExport(body) && workspace.officialRecordBoundary?.officialSubmission !== false) {
+    throw badRequest("District-system packages must preserve the non-submission boundary.");
+  }
+}
+
+function ensureGeneratedContentMetadata(content = {}, label) {
+  if (!String(content.contentLabel || "").trim()) throw badRequest(`${label} requires a content label.`);
+  if (!Array.isArray(content.sourceReferences) || !content.sourceReferences.some((source) => String(source || "").trim())) {
+    throw badRequest(`${label} requires at least one source reference.`);
+  }
+  const metadata = content.generationMetadata || {};
+  if (!metadata.generatedAt || !metadata.generatedBy || !metadata.generatedByRole || !metadata.modelProfile || !metadata.promptVersion) {
+    throw badRequest(`${label} requires complete generation metadata.`);
+  }
+}
+
+function isDistrictImportReviewReady(body = {}, workspace = {}) {
+  if (!isDistrictSystemExport(body)) return false;
+  return (workspace.exportTemplateReviews || []).some(
+    (review) =>
+      review.validationStatus === "District import review ready" &&
+      review.submissionMode !== "Production submission blocked"
+  );
+}
+
+function generatedContentMetadata(actor, role, generatedAt) {
+  return {
+    generatedAt,
+    generatedBy: actor,
+    generatedByRole: role,
+    modelProfile: "Local deterministic demo",
+    promptVersion: "fds-drafting-2026.07"
+  };
+}
+
+function generatedContentBoundary() {
+  return {
+    label: "AI-assisted draft - not official IEP language",
+    officialSubmission: false,
+    controllingSource: "The district-approved IEP and human IEP team decisions remain controlling.",
+    humanReviewRequired: true
+  };
+}
+
+function workingRecordLifecycle(recordType) {
+  return {
+    recordType,
+    label: "Working documentation - not an automatic IEP amendment",
+    officialSubmission: false,
+    humanReviewRequiredForOfficialUse: true
+  };
 }
 
 function isDistrictSystemExport(body = {}) {

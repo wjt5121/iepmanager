@@ -39,6 +39,7 @@ import {
   generateCompletenessReviewFlags,
   initialWorkspace,
   mergeExtractionSectionsIntoStructuredRecord,
+  normalizeGapClosureWorkspace,
   normalizeStructuredIepRecord,
   refreshRoleSummariesFromWorkspace,
   roles,
@@ -46,6 +47,7 @@ import {
   summaryCoverageItemsForWorkspace
 } from "./data.js";
 import { ApiError, downloadExportArtifact, downloadRetentionPackage, loadWorkspace, loginAsRole, mutateWorkspace } from "./api.js";
+import { GapClosurePanel } from "./GapClosurePanel.jsx";
 
 const LOCAL_WORKSPACE_KEY = "iep-workspace-state-v2";
 const LOCAL_PREFS_KEY = "iep-workspace-prefs-v1";
@@ -360,6 +362,14 @@ const viewMeta = {
   admin: ["Leadership", "Aggregate implementation risk"]
 };
 
+const gapClosurePermissions = {
+  manageGapClosure: true,
+  manageRolePolicy: true,
+  manageRecordLifecycle: true,
+  manageAlertRules: true,
+  manageSuccessMetrics: true
+};
+
 const permissionMatrix = {
   caseManager: {
     createStudent: true,
@@ -369,6 +379,7 @@ const permissionMatrix = {
     completeTask: true,
     acknowledgeTask: true,
     recordObservation: true,
+    reviewClassroomRoster: true,
     addTeamComment: true,
     moderateTeamComment: true,
     addProgress: true,
@@ -430,6 +441,7 @@ const permissionMatrix = {
     completeTask: true,
     acknowledgeTask: true,
     recordObservation: true,
+    reviewClassroomRoster: true,
     addTeamComment: true,
     addProgress: true,
     logService: false,
@@ -490,6 +502,7 @@ const permissionMatrix = {
     completeTask: true,
     acknowledgeTask: true,
     recordObservation: true,
+    reviewClassroomRoster: false,
     addTeamComment: true,
     addProgress: true,
     logService: true,
@@ -550,6 +563,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: false,
     addTeamComment: true,
     addProgress: false,
     logService: false,
@@ -610,6 +624,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: false,
     addTeamComment: true,
     addProgress: false,
     logService: false,
@@ -670,6 +685,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: true,
     addTeamComment: true,
     moderateTeamComment: true,
     addProgress: false,
@@ -705,6 +721,7 @@ const permissionMatrix = {
     manageSourceRegistry: true,
     manageAiGovernance: true,
     manageDistrictConfiguration: true,
+    ...gapClosurePermissions,
     manageAccessibility: true,
     manageSecurity: true,
     manageAuditAnchors: true,
@@ -731,6 +748,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: true,
     addTeamComment: true,
     moderateTeamComment: true,
     addProgress: false,
@@ -792,6 +810,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: true,
     addTeamComment: true,
     moderateTeamComment: true,
     addProgress: false,
@@ -827,6 +846,7 @@ const permissionMatrix = {
     manageSourceRegistry: true,
     manageAiGovernance: true,
     manageDistrictConfiguration: true,
+    ...gapClosurePermissions,
     manageAccessibility: true,
     manageSecurity: false,
     manageAuditAnchors: false,
@@ -853,6 +873,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: false,
     addTeamComment: false,
     addProgress: false,
     logService: false,
@@ -887,6 +908,7 @@ const permissionMatrix = {
     manageSourceRegistry: false,
     manageAiGovernance: true,
     manageDistrictConfiguration: true,
+    ...gapClosurePermissions,
     manageAccessibility: true,
     manageSecurity: true,
     manageAuditAnchors: true,
@@ -913,6 +935,7 @@ const permissionMatrix = {
     completeTask: false,
     acknowledgeTask: false,
     recordObservation: false,
+    reviewClassroomRoster: false,
     addTeamComment: false,
     addProgress: false,
     logService: false,
@@ -1238,6 +1261,25 @@ function reducer(state, action) {
         "Family comprehension",
         "Understanding response recorded",
         "A staff response and next step were recorded for a family summary understanding check."
+      );
+    }
+    case "reviewClassroomRoster": {
+      if (!can(state, "reviewClassroomRoster")) return state;
+      const reviewedAt = new Date().toISOString();
+      const review = createLocalClassroomRosterReview(state, action, reviewedAt);
+      if (!review) return state;
+      const reviewedIds = new Set(review.reviewedRosterIds);
+      return withAudit(
+        {
+          ...state,
+          teacherClassroomRoster: (state.teacherClassroomRoster || []).map((entry) =>
+            reviewedIds.has(entry.id) ? { ...entry, lastReviewedAt: reviewedAt } : entry
+          ),
+          teacherClassroomReviews: [review, ...(state.teacherClassroomReviews || [])]
+        },
+        "Classroom roster review",
+        "Classroom roster reviewed",
+        `${review.classPeriod} roster reviewed for ${review.reviewFocus}.`
       );
     }
     case "addSourceDocument": {
@@ -1931,6 +1973,53 @@ function reducer(state, action) {
         `${updated.name} marked ${status} for district deployment readiness.`
       );
     }
+    case "updateRolePolicy":
+      return updateLocalGapClosureRecord(state, action, {
+        collectionKey: "rolePolicyMatrix",
+        idKey: "roleId",
+        actionIdKey: "roleId",
+        reviewType: "Role policy",
+        title: "Role policy reviewed",
+        fields: ["studentScope", "defaultAccess", "visibleInformation", "status", "owner", "nextReviewDate", "note"]
+      });
+    case "updateRecordLifecycle":
+      return updateLocalGapClosureRecord(state, action, {
+        collectionKey: "recordLifecycleRules",
+        idKey: "id",
+        actionIdKey: "ruleId",
+        reviewType: "Record lifecycle",
+        title: "Record lifecycle rule reviewed",
+        fields: ["draftStatus", "reviewedStatus", "officialReady", "exportable", "requiredReviewRole", "boundaryLabel", "status", "reviewNote"]
+      });
+    case "updateAlertRule":
+      return updateLocalGapClosureRecord(state, action, {
+        collectionKey: "alertRules",
+        idKey: "id",
+        actionIdKey: "ruleId",
+        reviewType: "Alert prioritization",
+        title: "Alert prioritization rule reviewed",
+        fields: ["enabled", "triggerDays", "priority", "escalationRole", "status", "reviewNote"]
+      });
+    case "updateSuccessMetric":
+      return updateLocalGapClosureRecord(state, action, {
+        collectionKey: "successMetrics",
+        idKey: "id",
+        actionIdKey: "metricId",
+        reviewType: "Success metric",
+        title: "Success metric reviewed",
+        fields: ["baseline", "target", "reviewCadence", "owner", "status", "evidenceSource", "reviewNote"]
+      });
+    case "updateIntegrationSource":
+      return updateLocalGapClosureRecord(state, action, {
+        collectionKey: "integrationSources",
+        idKey: "id",
+        actionIdKey: "integrationId",
+        reviewType: "Integration source",
+        title: "Integration source reviewed",
+        fields: ["sourceOfTruth", "direction", "provider", "owner", "status", "nextReviewDate", "boundary", "reviewNote"]
+      });
+    case "updateGapDistrictConfiguration":
+      return updateLocalGapDistrictConfiguration(state, action);
     case "updateAccessibilityFinding": {
       const reviewedAt = new Date().toISOString();
       const certification = accessibilityCertificationForState(state);
@@ -2873,12 +2962,22 @@ function reducer(state, action) {
           guidedResponses,
           annotatedSample,
           status: "Draft - human review required",
+          reviewStatus: "Human review pending",
+          contentLabel: "AI-assisted fictional training draft",
+          sourceReferences: ["Fictional learner profile", "Guided intake responses", "Annotated sample cue"],
+          generationMetadata: localGeneratedContentMetadata(state.user, createdAt),
+          officialRecordBoundary: localGeneratedContentBoundary(),
           createdBy: state.user.name,
           createdByRole: state.user.role,
           createdAt,
           sections: draftSeedSections(action.profile, guidedResponses, annotatedSample).map((section) => ({
             ...section,
             status: "Draft - human review required",
+            reviewStatus: "Human review pending",
+            contentLabel: "AI-assisted fictional training draft section",
+            sourceReferences: ["Fictional learner profile", "Guided intake responses", "Annotated sample cue"],
+            generationMetadata: localGeneratedContentMetadata(state.user, createdAt),
+            officialRecordBoundary: localGeneratedContentBoundary(),
             version: 1,
             versionHistory: []
           }))
@@ -2904,6 +3003,7 @@ function reducer(state, action) {
           draft: {
             ...state.draft,
             status: "Revised - human review required",
+            reviewStatus: "Human review pending",
             approvedBy: null,
             approvedByRole: null,
             approvedAt: null,
@@ -2929,6 +3029,7 @@ function reducer(state, action) {
           draft: {
             ...state.draft,
             status: "Regenerated - human review required",
+            reviewStatus: "Human review pending",
             approvedBy: null,
             approvedByRole: null,
             approvedAt: null,
@@ -2953,9 +3054,19 @@ function reducer(state, action) {
           draft: {
             ...state.draft,
             status: "Approved for export",
+            reviewStatus: "Human reviewed - approved for export",
             approvedBy: state.user.name,
             approvedByRole: state.user.role,
-            approvedAt
+            approvedAt,
+            sections: (state.draft.sections || []).map((section) => ({
+              ...section,
+              reviewStatus: "Human reviewed - approved for export",
+              humanReviewMetadata: {
+                reviewedBy: state.user.name,
+                reviewedByRole: state.user.role,
+                reviewedAt: approvedAt
+              }
+            }))
           }
         },
         "Human review",
@@ -3002,6 +3113,104 @@ function reducer(state, action) {
 
 function withAudit(nextState, type, title, detail) {
   return withAuditEvents(nextState, [{ type, title, detail }]);
+}
+
+function updateLocalGapClosureRecord(state, action, config) {
+  const normalized = normalizeGapClosureWorkspace(state);
+  const subjectId = action[config.actionIdKey];
+  const existing = (normalized[config.collectionKey] || []).find((item) => item[config.idKey] === subjectId);
+  if (!existing) return state;
+  const reviewedAt = new Date().toISOString();
+  const changes = Object.fromEntries(config.fields.map((field) => [field, action[field]]));
+  const reviewDigest = [config.reviewType, subjectId, state.user.id, reviewedAt, JSON.stringify(changes)].join("|");
+  const updated = {
+    ...existing,
+    ...changes,
+    reviewedBy: state.user.name,
+    reviewedByRole: state.user.role,
+    reviewedAt,
+    reviewDigest
+  };
+  const review = {
+    id: `gap-review-${Date.now()}`,
+    reviewType: config.reviewType,
+    subjectId,
+    subjectLabel: existing.roleLabel || existing.name || subjectId,
+    status: updated.status,
+    reviewNote: action.reviewNote || action.note || "Governance record reviewed.",
+    reviewedBy: state.user.name,
+    reviewedByRole: state.user.role,
+    reviewedAt,
+    reviewDigest
+  };
+  return withAudit(
+    {
+      ...normalized,
+      [config.collectionKey]: normalized[config.collectionKey].map((item) =>
+        item[config.idKey] === subjectId ? updated : item
+      ),
+      gapClosure: {
+        ...normalized.gapClosure,
+        status: "In readiness review",
+        lastReviewedBy: state.user.name,
+        lastReviewedAt: reviewedAt,
+        latestReviewDigest: reviewDigest,
+        reviewHistory: [review, ...(normalized.gapClosure.reviewHistory || [])]
+      }
+    },
+    "Gap closure governance",
+    config.title,
+    `${review.subjectLabel} was reviewed by ${state.user.name}.`
+  );
+}
+
+function updateLocalGapDistrictConfiguration(state, action) {
+  const normalized = normalizeGapClosureWorkspace(state);
+  const reviewedAt = new Date().toISOString();
+  const updated = {
+    ...(normalized.districtConfiguration || {}),
+    districtName: action.districtName,
+    jurisdiction: action.jurisdiction,
+    configurationVersion: action.configurationVersion,
+    tenancyMode: action.tenancyMode,
+    dataResidency: action.dataResidency,
+    registryGovernanceStatus: action.registryGovernanceStatus,
+    lastReviewedBy: state.user.name,
+    lastReviewedAt: reviewedAt
+  };
+  const reviewDigest = ["District governance configuration", updated.districtId, state.user.id, reviewedAt, action.reviewNote].join("|");
+  const review = {
+    id: `gap-review-${Date.now()}`,
+    reviewType: "District governance configuration",
+    subjectId: updated.districtId,
+    subjectLabel: updated.districtName,
+    status: updated.registryGovernanceStatus,
+    reviewNote: action.reviewNote,
+    reviewedBy: state.user.name,
+    reviewedByRole: state.user.role,
+    reviewedAt,
+    reviewDigest
+  };
+  return withAudit(
+    {
+      ...normalized,
+      districtConfiguration: {
+        ...updated,
+        governanceReviewDigest: reviewDigest,
+        configurationReviews: [review, ...(updated.configurationReviews || [])]
+      },
+      gapClosure: {
+        ...normalized.gapClosure,
+        lastReviewedBy: state.user.name,
+        lastReviewedAt: reviewedAt,
+        latestReviewDigest: reviewDigest,
+        reviewHistory: [review, ...(normalized.gapClosure.reviewHistory || [])]
+      }
+    },
+    "Gap closure governance",
+    "District governance configuration reviewed",
+    `${updated.districtName} governance profile was reviewed.`
+  );
 }
 
 function withAuditEvents(nextState, events = []) {
@@ -3719,6 +3928,58 @@ function localIdentityLifecycleDigest(review, state) {
     review.roleProvisioningNote,
     review.nextReviewDate,
     state.user.id,
+    review.reviewedAt
+  ].join("|");
+}
+
+function createLocalClassroomRosterReview(state, action, reviewedAt) {
+  const classPeriod = String(action.classPeriod || "").trim();
+  const reviewFocus = String(action.reviewFocus || "Classroom support review").trim();
+  const actionPlan = String(action.actionPlan || "").trim();
+  const requestedIds = Array.from(
+    new Set((Array.isArray(action.reviewedRosterIds) ? action.reviewedRosterIds : []).map((id) => String(id || "").trim()).filter(Boolean))
+  );
+  if (!classPeriod || !reviewFocus || !actionPlan || !requestedIds.length) return null;
+  const roster = classroomRosterForState(state).filter((entry) => entry.classPeriod === classPeriod);
+  const rowsById = new Map(roster.map((entry) => [entry.id, entry]));
+  const selectedRows = requestedIds.map((id) => rowsById.get(id)).filter(Boolean);
+  if (!selectedRows.length) return null;
+  const review = {
+    id: `classroom-review-${Date.now()}`,
+    teacherUserId: selectedRows[0]?.teacherUserId || state.user.id,
+    teacherName: selectedRows[0]?.teacherName || state.user.name,
+    classPeriod,
+    reviewFocus,
+    reviewedRosterIds: selectedRows.map((row) => row.id),
+    reviewedCount: selectedRows.length,
+    highPriorityCount: selectedRows.filter((row) => row.priority === "High").length,
+    actionPlan,
+    followUpDate: String(action.followUpDate || "").trim(),
+    sourceBoundary:
+      "Classroom review summarizes teacher-facing implementation supports only; linked official IEP records remain the controlling source.",
+    reviewedBy: state.user.name,
+    reviewedByRole: state.user.role,
+    reviewedByUserId: state.user.id,
+    reviewedAt
+  };
+  return {
+    ...review,
+    reviewDigest: localClassroomRosterReviewDigest(review, selectedRows, state)
+  };
+}
+
+function localClassroomRosterReviewDigest(review, rosterRows, state) {
+  return [
+    "local-classroom-roster-review",
+    state.districtConfiguration?.districtId || "local-district",
+    review.teacherUserId,
+    review.classPeriod,
+    review.reviewFocus,
+    review.reviewedRosterIds.join(","),
+    rosterRows.map((row) => `${row.id}:${row.priority}:${row.iepStatus}:${row.nextAction}`).join("|"),
+    review.actionPlan,
+    review.followUpDate,
+    review.reviewedByUserId,
     review.reviewedAt
   ].join("|");
 }
@@ -4856,6 +5117,7 @@ function reviseDraftSection(section, action, user, revisedAt) {
     ...section,
     content: action.content.trim(),
     status: "Revised - human review required",
+    reviewStatus: "Human review pending",
     version: previousVersion + 1,
     revisionNote,
     reviewedBy: user.name,
@@ -4874,6 +5136,25 @@ function reviseDraftSection(section, action, user, revisedAt) {
   };
 }
 
+function localGeneratedContentMetadata(user, generatedAt) {
+  return {
+    generatedAt,
+    generatedBy: user.name,
+    generatedByRole: user.role,
+    modelProfile: "Local deterministic demo",
+    promptVersion: "fds-drafting-2026.07"
+  };
+}
+
+function localGeneratedContentBoundary() {
+  return {
+    label: "AI-assisted draft - not official IEP language",
+    officialSubmission: false,
+    controllingSource: "The district-approved IEP and human IEP team decisions remain controlling.",
+    humanReviewRequired: true
+  };
+}
+
 function regenerateDraftSection(section, profile, action, user, regeneratedAt) {
   const previousVersion = section.version || 1;
   const guidance = action.guidance?.trim() || "Reviewer requested regeneration before approval.";
@@ -4881,6 +5162,7 @@ function regenerateDraftSection(section, profile, action, user, regeneratedAt) {
     ...section,
     content: regeneratedDraftContent(section, profile, guidance),
     status: "Regenerated - human review required",
+    reviewStatus: "Human review pending",
     version: previousVersion + 1,
     revisionNote: guidance,
     regenerationGuidance: guidance,
@@ -5688,8 +5970,9 @@ function useReducerWithPersistence() {
   const [state, dispatchBase] = useReducer(reducer, initialWorkspace, (seed) => {
     const savedWorkspace = readStorage(LOCAL_WORKSPACE_KEY);
     const savedPrefs = readStorage(LOCAL_PREFS_KEY);
-    const workspace =
-      savedWorkspace?.sourceRegistry && savedWorkspace?.summaries && savedWorkspace?.auditLog ? savedWorkspace : seed;
+    const workspace = normalizeGapClosureWorkspace(
+      savedWorkspace?.sourceRegistry && savedWorkspace?.summaries && savedWorkspace?.auditLog ? savedWorkspace : seed
+    );
     return {
       ...workspace,
       user: {
@@ -5752,7 +6035,7 @@ function Sidebar({ state, view, navigate, mobileOpen, setMobileOpen }) {
         <div className="brand">
           <div className="brandmark">IEP</div>
           <div>
-            <strong>Implementation Workspace</strong>
+            <strong>IEP Implementation Assistant</strong>
             <small>Pennsylvania school-age pilot</small>
           </div>
         </div>
@@ -5986,6 +6269,9 @@ function DashboardView({ state, navigate, setRoleView, dispatch, exportRecord })
         navigate={navigate}
         dispatch={dispatch}
       />
+      {state.teacherClassroomRoster?.length ? (
+        <ClassroomRosterCard state={state} navigate={navigate} dispatch={dispatch} />
+      ) : null}
       <div className="grid equal">
         <Card
           title="Caseload snapshot"
@@ -6098,6 +6384,220 @@ function IepReviewQueueCard({ queue, navigate, dispatch }) {
       </div>
     </Card>
   );
+}
+
+function ClassroomRosterCard({ state, navigate, dispatch }) {
+  const roster = useMemo(() => classroomRosterForState(state), [state]);
+  const periods = useMemo(() => Array.from(new Set(roster.map((entry) => entry.classPeriod))).filter(Boolean), [roster]);
+  const [classPeriod, setClassPeriod] = useState(periods[0] || "");
+  const [reviewFocus, setReviewFocus] = useState("Weekly accommodation scan");
+  const [actionPlan, setActionPlan] = useState(
+    "Prioritize high-need rows, verify assessment accommodations, and capture any progress evidence due before the next team check-in."
+  );
+  const [followUpDate, setFollowUpDate] = useState("2026-06-30");
+
+  useEffect(() => {
+    if (!periods.length) {
+      setClassPeriod("");
+      return;
+    }
+    if (!periods.includes(classPeriod)) setClassPeriod(periods[0]);
+  }, [periods, classPeriod]);
+
+  const visibleRoster = roster.filter((entry) => entry.classPeriod === classPeriod);
+  const summary = classroomRosterSummary(visibleRoster);
+  const latestReview = (state.teacherClassroomReviews || [])
+    .filter((review) => review.classPeriod === classPeriod)
+    .slice()
+    .sort((a, b) => String(b.reviewedAt || "").localeCompare(String(a.reviewedAt || "")))[0];
+  const ready = Boolean(classPeriod && visibleRoster.length && reviewFocus.trim() && actionPlan.trim() && can(state, "reviewClassroomRoster"));
+
+  if (!roster.length) return null;
+
+  return (
+    <Card
+      title="Classroom management"
+      description="Teacher-facing support roster for scanning a full class period, prioritizing follow-through, and preserving official-record boundaries."
+      action={<Badge tone={summary.highPriority ? "amber" : "green"}>{summary.total} students</Badge>}
+    >
+      <div className="classroom-toolbar">
+        <label className="field">
+          <span>Class period</span>
+          <select aria-label="Class period" value={classPeriod} onChange={(event) => setClassPeriod(event.target.value)}>
+            {periods.map((period) => <option value={period} key={period}>{period}</option>)}
+          </select>
+        </label>
+        <div className="classroom-stats" aria-label="Classroom roster summary">
+          <span><strong>{summary.highPriority}</strong> high priority</span>
+          <span><strong>{summary.progressDue}</strong> progress checks</span>
+          <span><strong>{summary.serviceAlerts}</strong> service alerts</span>
+          <span><strong>{summary.accommodations}</strong> accommodations</span>
+        </div>
+      </div>
+      {latestReview ? (
+        <div className="classroom-review-strip">
+          <ShieldCheck size={15} />
+          <span>
+            <strong>{latestReview.reviewFocus}</strong>
+            Reviewed {latestReview.reviewedCount} students by {latestReview.reviewedBy} on {formatDateTime(latestReview.reviewedAt)}.
+          </span>
+          <Badge tone="blue">Digest {shortHash(latestReview.reviewDigest)}</Badge>
+        </div>
+      ) : null}
+      <div className="classroom-table-wrap">
+        <table className="table classroom-table">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Priority</th>
+              <th>Support load</th>
+              <th>Next action</th>
+              <th>Source</th>
+              <th>Workspace</th>
+            </tr>
+          </thead>
+          <tbody>
+            {visibleRoster.map((entry) => (
+              <tr key={entry.id}>
+                <td>
+                  <strong>{entry.studentName}</strong>
+                  <small>{entry.course} · grade {entry.grade}</small>
+                </td>
+                <td>
+                  <Badge tone={classroomPriorityTone(entry.priority)}>{entry.priority}</Badge>
+                  <small>{entry.iepStatus}</small>
+                </td>
+                <td>
+                  <span className="classroom-load">
+                    <strong>{entry.accommodationCount}</strong> supports
+                    <strong>{entry.taskCount}</strong> tasks
+                    <strong>{entry.overdueProgressCount}</strong> due
+                  </span>
+                  <small>{entry.serviceAlertCount ? `${entry.serviceAlertCount} service alert` : "No service alert"}</small>
+                </td>
+                <td>
+                  <span className="classroom-support-text">{entry.nextAction}</span>
+                  <small>{entry.supportSummary}</small>
+                </td>
+                <td>
+                  <Badge tone={classroomStatusTone(entry)}>{entry.officialRecordStatus}</Badge>
+                  <small>{entry.sourceTrace}</small>
+                </td>
+                <td>
+                  <Button
+                    icon={Eye}
+                    disabled={!entry.linkedStudentId}
+                    title={entry.linkedStudentId ? undefined : "No full IEP workspace imported for this classroom row."}
+                    onClick={async () => {
+                      await dispatch(
+                        { type: "selectStudent", studentId: entry.linkedStudentId },
+                        { title: "Student selected", detail: `${entry.studentName} workspace opened.` }
+                      );
+                      navigate("student");
+                    }}
+                  >
+                    Open
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="meeting-input classroom-review-form">
+        <div className="mini-form-grid">
+          <label className="field">
+            <span>Review focus</span>
+            <select aria-label="Classroom review focus" value={reviewFocus} onChange={(event) => setReviewFocus(event.target.value)}>
+              <option>Weekly accommodation scan</option>
+              <option>Progress evidence check</option>
+              <option>Meeting preparation scan</option>
+              <option>Service carryover scan</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Classroom follow-up date</span>
+            <input
+              aria-label="Classroom follow-up date"
+              type="date"
+              value={followUpDate}
+              onChange={(event) => setFollowUpDate(event.target.value)}
+            />
+          </label>
+        </div>
+        <label className="field">
+          <span>Classroom action plan</span>
+          <textarea
+            aria-label="Classroom action plan"
+            value={actionPlan}
+            onChange={(event) => setActionPlan(event.target.value)}
+          />
+        </label>
+        {!can(state, "reviewClassroomRoster") ? (
+          <AccessNotice text={`${roles[state.user.role].label} can view classroom support evidence but cannot record roster reviews.`} />
+        ) : null}
+        <Button
+          icon={ClipboardCheck}
+          disabled={!ready}
+          onClick={() =>
+            dispatch(
+              {
+                type: "reviewClassroomRoster",
+                classPeriod,
+                reviewFocus,
+                reviewedRosterIds: visibleRoster.map((entry) => entry.id),
+                actionPlan: actionPlan.trim(),
+                followUpDate
+              },
+              {
+                title: "Classroom roster reviewed",
+                detail: `${classPeriod} support scan saved for ${visibleRoster.length} students.`
+              }
+            )
+          }
+        >
+          Record classroom roster review
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+function classroomRosterForState(state) {
+  const priorityRank = { High: 0, Medium: 1, Low: 2 };
+  return (state.teacherClassroomRoster || [])
+    .slice()
+    .sort((a, b) =>
+      String(a.classPeriod || "").localeCompare(String(b.classPeriod || "")) ||
+      (priorityRank[a.priority] ?? 9) - (priorityRank[b.priority] ?? 9) ||
+      String(a.studentName || "").localeCompare(String(b.studentName || ""))
+    );
+}
+
+function classroomRosterSummary(roster = []) {
+  return roster.reduce(
+    (summary, entry) => ({
+      total: summary.total + 1,
+      highPriority: summary.highPriority + (entry.priority === "High" ? 1 : 0),
+      progressDue: summary.progressDue + Number(entry.overdueProgressCount || 0),
+      serviceAlerts: summary.serviceAlerts + Number(entry.serviceAlertCount || 0),
+      accommodations: summary.accommodations + Number(entry.accommodationCount || 0),
+      tasks: summary.tasks + Number(entry.taskCount || 0)
+    }),
+    { total: 0, highPriority: 0, progressDue: 0, serviceAlerts: 0, accommodations: 0, tasks: 0 }
+  );
+}
+
+function classroomPriorityTone(priority) {
+  if (priority === "High") return "red";
+  if (priority === "Medium") return "amber";
+  return "green";
+}
+
+function classroomStatusTone(entry) {
+  if (/linked|verified|active/i.test(entry.officialRecordStatus || entry.iepStatus || "")) return "green";
+  if (/due|prep|coordination|check/i.test(entry.iepStatus || "")) return "amber";
+  return "blue";
 }
 
 function RecentParentSummariesCard({ activity, navigate, setRoleView }) {
@@ -11894,6 +12394,7 @@ function AdminView({ state, dispatch }) {
         <Metric label="Continuity risks" value={dashboard.highContinuityRisks.length} note="Vacancy or coverage risks needing review" icon={Users} tone="red" />
         <Metric label="Caseload overview" value={state.students.length} note={`${dashboard.schoolRows.length} schools represented`} icon={Users} tone="blue" />
       </div>
+      <GapClosurePanel state={state} dispatch={dispatch} canManage={can(state, "manageGapClosure")} />
       <div className="grid two-one">
         <Card title="Compliance flags by school" description="Open advisory findings grouped by building for follow-up.">
           {dashboard.schoolRows.map((row) => (

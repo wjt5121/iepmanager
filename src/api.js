@@ -208,6 +208,18 @@ function requestForAction(action, state) {
           nextStep: action.nextStep
         }
       };
+    case "reviewClassroomRoster":
+      return {
+        method: "POST",
+        path: "/api/classroom-roster/reviews",
+        body: {
+          classPeriod: action.classPeriod,
+          reviewFocus: action.reviewFocus,
+          reviewedRosterIds: action.reviewedRosterIds,
+          actionPlan: action.actionPlan,
+          followUpDate: action.followUpDate
+        }
+      };
     case "toggleTask":
       return {
         method: "POST",
@@ -487,6 +499,97 @@ function requestForAction(action, state) {
           nextReviewDate: action.nextReviewDate,
           evidenceNote: action.evidenceNote,
           productionBoundary: action.productionBoundary
+        }
+      };
+    case "updateRolePolicy":
+      return {
+        method: "PATCH",
+        path: "/api/governance/role-policy",
+        body: {
+          roleId: action.roleId,
+          studentScope: action.studentScope,
+          defaultAccess: action.defaultAccess,
+          visibleInformation: action.visibleInformation,
+          status: action.status,
+          owner: action.owner,
+          nextReviewDate: action.nextReviewDate,
+          note: action.note
+        }
+      };
+    case "updateRecordLifecycle":
+      return {
+        method: "PATCH",
+        path: "/api/governance/record-lifecycle",
+        body: {
+          ruleId: action.ruleId,
+          draftStatus: action.draftStatus,
+          reviewedStatus: action.reviewedStatus,
+          officialReady: action.officialReady,
+          exportable: action.exportable,
+          requiredReviewRole: action.requiredReviewRole,
+          boundaryLabel: action.boundaryLabel,
+          status: action.status,
+          reviewNote: action.reviewNote
+        }
+      };
+    case "updateAlertRule":
+      return {
+        method: "PATCH",
+        path: "/api/governance/alert-rules",
+        body: {
+          ruleId: action.ruleId,
+          enabled: action.enabled,
+          triggerDays: action.triggerDays,
+          priority: action.priority,
+          escalationRole: action.escalationRole,
+          status: action.status,
+          reviewNote: action.reviewNote
+        }
+      };
+    case "updateSuccessMetric":
+      return {
+        method: "PATCH",
+        path: "/api/governance/success-metrics",
+        body: {
+          metricId: action.metricId,
+          baseline: action.baseline,
+          target: action.target,
+          reviewCadence: action.reviewCadence,
+          owner: action.owner,
+          status: action.status,
+          evidenceSource: action.evidenceSource,
+          reviewNote: action.reviewNote
+        }
+      };
+    case "updateIntegrationSource":
+      return {
+        method: "PATCH",
+        path: "/api/governance/integration-sources",
+        body: {
+          integrationId: action.integrationId,
+          sourceOfTruth: action.sourceOfTruth,
+          direction: action.direction,
+          provider: action.provider,
+          owner: action.owner,
+          status: action.status,
+          nextReviewDate: action.nextReviewDate,
+          boundary: action.boundary,
+          reviewNote: action.reviewNote
+        }
+      };
+    case "updateGapDistrictConfiguration":
+      return {
+        method: "PATCH",
+        path: "/api/governance/district-configuration",
+        body: {
+          districtId: action.districtId,
+          districtName: action.districtName,
+          jurisdiction: action.jurisdiction,
+          configurationVersion: action.configurationVersion,
+          tenancyMode: action.tenancyMode,
+          dataResidency: action.dataResidency,
+          registryGovernanceStatus: action.registryGovernanceStatus,
+          reviewNote: action.reviewNote
         }
       };
     case "updateAccessibilityFinding":

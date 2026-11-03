@@ -223,13 +223,26 @@ const staffReviewRoles = new Set([
 const leadershipContinuityRoles = new Set(["caseManager", "administrator", "schoolAdministrator", "districtAdministrator", "readOnlyReviewer"]);
 const securityGovernanceRoles = new Set(["administrator", "systemAdministrator"]);
 const districtConfigurationRoles = new Set(["administrator", "districtAdministrator", "systemAdministrator"]);
+const gapClosureGovernanceRoles = new Set(["administrator", "districtAdministrator", "systemAdministrator"]);
 const exportTemplateReviewRoles = new Set(["administrator", "districtAdministrator", "systemAdministrator"]);
 const portalAccessReviewRoles = new Set(["caseManager", "administrator", "schoolAdministrator", "districtAdministrator", "readOnlyReviewer"]);
+const classroomRosterRoles = new Set([
+  "caseManager",
+  "generalEducation",
+  "administrator",
+  "schoolAdministrator",
+  "districtAdministrator",
+  "readOnlyReviewer"
+]);
 
 export function filterWorkspaceForUser(workspace, user) {
   const visibleStudentIds = visibleIds(user, workspace.students.map((student) => student.id));
   const visibleSet = new Set(visibleStudentIds);
   const visibleIepIds = new Set((workspace.ieps || []).filter((iep) => visibleSet.has(iep.studentId)).map((iep) => iep.id));
+  const visibleClassroomRoster = (workspace.teacherClassroomRoster || []).filter((entry) =>
+    canAccessClassroomRosterEntry(user, entry, visibleSet)
+  );
+  const visibleClassroomRosterIds = new Set(visibleClassroomRoster.map((entry) => entry.id));
   const currentStudentId = visibleSet.has(workspace.currentStudentId) ? workspace.currentStudentId : visibleStudentIds[0] || null;
 
   return {
@@ -277,6 +290,14 @@ export function filterWorkspaceForUser(workspace, user) {
     reviewFlags: (workspace.reviewFlags || []).filter((flag) => visibleSet.has(flag.studentId)),
     complianceReviews: (workspace.complianceReviews || []).filter((review) => visibleSet.has(review.studentId)),
     legalReviewRoutes: (workspace.legalReviewRoutes || []).filter((route) => visibleSet.has(route.studentId)),
+    teacherClassroomRoster: visibleClassroomRoster,
+    teacherClassroomReviews: canViewClassroomRoster(user.role)
+      ? (workspace.teacherClassroomReviews || []).filter(
+          (review) =>
+            (user.role === "generalEducation" ? review.teacherUserId === user.id : true) &&
+            (review.reviewedRosterIds || []).some((rosterId) => visibleClassroomRosterIds.has(rosterId))
+        )
+      : [],
     staffContinuity: canViewLeadershipContinuity(user.role)
       ? (workspace.staffContinuity || []).filter((record) =>
           (record.affectedStudentIds || []).some((studentId) => visibleSet.has(studentId))
@@ -301,6 +322,15 @@ export function filterWorkspaceForUser(workspace, user) {
     districtConfiguration: canViewDistrictConfiguration(user.role)
       ? workspace.districtConfiguration
       : publicDistrictConfiguration(workspace.districtConfiguration),
+    gapClosure: canViewGapClosureGovernance(user.role)
+      ? workspace.gapClosure
+      : publicGapClosure(workspace.gapClosure, workspace.officialRecordBoundary),
+    rolePolicyMatrix: canViewGapClosureGovernance(user.role) ? (workspace.rolePolicyMatrix || []) : [],
+    recordLifecycleRules: canViewGapClosureGovernance(user.role) ? (workspace.recordLifecycleRules || []) : [],
+    integrationSources: canViewGapClosureGovernance(user.role) ? (workspace.integrationSources || []) : [],
+    alertRules: canViewGapClosureGovernance(user.role) ? (workspace.alertRules || []) : [],
+    successMetrics: canViewGapClosureGovernance(user.role) ? (workspace.successMetrics || []) : [],
+    officialRecordBoundary: publicOfficialRecordBoundary(workspace.officialRecordBoundary),
     auditAnchors: canViewSecurityGovernance(user.role) ? (workspace.auditAnchors || []) : [],
     auditRetentionPackages: canViewSecurityGovernance(user.role) ? (workspace.auditRetentionPackages || []) : [],
     retentionPolicyReviews: canViewRetentionPolicyReviews(user.role) ? (workspace.retentionPolicyReviews || []) : [],
@@ -373,12 +403,27 @@ function canViewPortalAccessReview(role) {
   return portalAccessReviewRoles.has(role);
 }
 
+export function canViewClassroomRoster(role) {
+  return classroomRosterRoles.has(role);
+}
+
+export function canAccessClassroomRosterEntry(user, entry = {}, visibleSet = new Set()) {
+  if (!canViewClassroomRoster(user.role)) return false;
+  if (user.role === "generalEducation") return entry.teacherUserId === user.id;
+  if (user.studentIds?.includes("*")) return true;
+  return !entry.linkedStudentId || visibleSet.has(entry.linkedStudentId);
+}
+
 function canViewSecurityGovernance(role) {
   return securityGovernanceRoles.has(role);
 }
 
 function canViewDistrictConfiguration(role) {
   return districtConfigurationRoles.has(role);
+}
+
+function canViewGapClosureGovernance(role) {
+  return gapClosureGovernanceRoles.has(role);
 }
 
 function canViewRetentionPolicyReviews(role) {
@@ -401,6 +446,30 @@ function publicDistrictConfiguration(configuration = {}) {
     integrationReadiness: [],
     dataProtectionReadiness: [],
     configurationReviews: []
+  };
+}
+
+function publicGapClosure(gapClosure = {}, officialRecordBoundary = {}) {
+  return {
+    version: gapClosure?.version || "",
+    status: "Restricted to administrator review",
+    scope: "Official-record boundaries and district readiness governance",
+    owner: "District special education leadership",
+    lastReviewedBy: "",
+    lastReviewedAt: gapClosure?.lastReviewedAt || "",
+    reviewHistory: [],
+    workflowAcceptance: [],
+    complianceChecklist: [],
+    officialRecordBoundary: publicOfficialRecordBoundary(officialRecordBoundary)
+  };
+}
+
+function publicOfficialRecordBoundary(boundary = {}) {
+  return {
+    label: boundary?.label || "Working workspace - not the official IEP record",
+    officialSubmission: false,
+    controllingSource: boundary?.controllingSource || "The district-approved IEP and district systems remain controlling.",
+    humanReviewRequired: boundary?.humanReviewRequired !== false
   };
 }
 
