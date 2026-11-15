@@ -9,7 +9,7 @@ const apiDataDir = mkdtempSync(join(tmpdir(), "iep-playwright-api-"));
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["fds-smoke.spec.js", "fds-api.spec.js"],
+  testMatch: ["fds-smoke.spec.js", "fds-api.spec.js", "neo-journey.spec.js"],
   fullyParallel: false,
   workers: 1,
   reporter: [["list"]],
@@ -33,7 +33,7 @@ export default defineConfig({
     {
       command: "npm run dev -- --port 5177",
       url: "http://127.0.0.1:5177",
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
       timeout: 120_000,
       env: {
         VITE_IEP_API_URL: apiBaseURL

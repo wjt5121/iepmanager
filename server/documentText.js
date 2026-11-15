@@ -17,6 +17,11 @@ export function extractDocumentText({ name = "Uploaded_IEP_Source.txt", mimeType
 
   const fileBuffer = Buffer.from(fileBase64, "base64");
   const detectedType = documentTypeFromName(name, mimeType, fileBuffer);
+  if (!detectedType) {
+    const error = new Error("Unsupported file type. Use PDF, DOCX, or TXT. Images and legacy DOC require local conversion; OCR is not configured.");
+    error.status = 400;
+    throw error;
+  }
 
   if (detectedType === "DOCX") {
     const result = extractDocxText(fileBuffer);
@@ -88,7 +93,7 @@ function extractPdfText(buffer) {
   return {
     sourceText,
     extractionMethod: "pdf-embedded-text",
-    sourceSegments: sourceText ? sourceSegments : [],
+    sourceSegments: sourceText ? sourceSegments.map((segment) => ({ ...segment, text: limitSegment(segment.text) })) : [],
     parseWarnings: warnings
   };
 }
@@ -112,7 +117,7 @@ function extractPdfPageSegments(buffer) {
       if (!text) return null;
       return {
         label: `page ${index + 1}`,
-        text: limitSegment(text),
+        text,
         pageNumber: index + 1,
         anchorType: "pdf-page",
         locator: {
@@ -180,7 +185,7 @@ function extractPdfDocumentSegment(buffer) {
     ? [
         {
           label: "embedded text",
-          text: limitSegment(text),
+          text,
           anchorType: "pdf-document",
           locator: {
             precision: "document"

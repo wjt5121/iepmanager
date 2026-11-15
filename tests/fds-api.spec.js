@@ -2270,7 +2270,8 @@ test.describe("API-backed workspace integration", () => {
 
     await panel.getByRole("tab", { name: "Roles & records" }).click();
     await expect(panel).toContainText("Special education teacher / case manager");
-    await expect(panel).toContainText("AI-assisted draft - not official IEP language");
+    await expect(panel).toContainText("AI-assisted draft or summary");
+    await expect(panel).toContainText("AI-assisted text must remain labeled, cited, editable, and unshared until reviewed.");
     const roleEditor = page.getByTestId("role-policy-editor");
     await roleEditor.getByLabel("Review role policy record").selectOption("generalEducation");
     await roleEditor.getByLabel("Student scope").fill("Assigned classes and students only");
@@ -2307,6 +2308,7 @@ test.describe("API-backed workspace integration", () => {
     await page.locator(".role-control select").selectOption("parent");
     await expectToast(page, "Account switched");
     await nav(page, "Leadership");
+    await panel.getByRole("tab", { name: "Overview", exact: true }).click();
     await expect(panel).toContainText("Working workspace - not the official IEP record");
     await expect(panel).toContainText("Detailed readiness policy is restricted to administrator governance roles");
     await expect(panel).toContainText("Roles documented");

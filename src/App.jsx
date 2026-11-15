@@ -5793,7 +5793,7 @@ export function App() {
       if (message) notify(message.title, message.detail);
       return payload;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) {
+      if (error instanceof ApiError && error.status) {
         setSyncStatus({ mode: "api", label: "API-backed workspace" });
         notify("Action blocked", error.message);
         return null;
@@ -8249,7 +8249,7 @@ function IntakeView({ state, dispatch, navigate, exportRecord }) {
                 <input
                   type="file"
                   disabled={!can(state, "upload")}
-                  accept=".pdf,.doc,.docx,.txt"
+                  accept=".pdf,.docx,.txt"
                   onChange={async (event) => {
                     const file = event.target.files?.[0];
                     if (!file) return;

@@ -1244,6 +1244,9 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
         const studentId = requiredString(body.studentId, "Student");
         requireStudentAccess(user, studentId);
         const parsedDocument = extractDocumentText(body);
+        if (!parsedDocument.sourceText.trim()) {
+          throw badRequest("No readable source text was found. Scanned documents require local OCR, which is not configured. Use a text PDF, DOCX, TXT, or paste verified text.");
+        }
         const documentId = `doc-${randomUUID()}`;
         const originalFile = parsedDocument.fileBuffer
           ? await store.saveDocumentFile(documentId, body.name || "Uploaded_IEP_Source", parsedDocument.fileBuffer)
@@ -4305,7 +4308,10 @@ export function createApiServer({ store = new WorkspaceStore(), auth = new DemoA
 
 export async function startServer({ port = process.env.PORT || 8787, store, auth, enableTestReset = false } = {}) {
   const server = createApiServer({ store, auth, enableTestReset });
-  await new Promise((resolve) => server.listen(port, resolve));
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", resolve);
+  });
   return server;
 }
 

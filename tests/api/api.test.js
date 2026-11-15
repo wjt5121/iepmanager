@@ -3763,9 +3763,10 @@ test("detects audit-log tampering", async (t) => {
   });
   assert.equal(update.response.status, 200);
 
-  const auditPath = join(dataDir, "audit-log.ndjson");
-  const original = await readFile(auditPath, "utf8");
-  await writeFile(auditPath, original.replace("Implementation task updated", "Implementation task altered"));
+  const auditPath = join(dataDir, "workspace.json");
+  const original = JSON.parse(await readFile(auditPath, "utf8"));
+  original.auditEvents.at(-1).title = "Implementation task altered";
+  await writeFile(auditPath, JSON.stringify(original));
 
   const verifyResult = await request("/api/audit/verify");
   assert.equal(verifyResult.response.status, 200);
@@ -3855,3 +3856,19 @@ function escapeXml(value) {
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
 }
+
+test("unreadable intake rejects without replacing the selected student's source", async (t) => {
+  const { request } = await withApi(t);
+  const before = (await request('/api/workspace')).payload.workspace;
+  for (const body of [
+    { name: 'empty.txt', sourceText: '   ' },
+    { name: 'worksheet.png', mimeType: 'image/png', fileBase64: Buffer.from('synthetic raster').toString('base64') },
+    { name: 'scan.pdf', mimeType: 'application/pdf', fileBase64: Buffer.from('%PDF-1.4\n1 0 obj <</Type /Catalog>> endobj\n%%EOF').toString('base64') }
+  ]) {
+    const result = await request('/api/intake', {method:'POST', body:{studentId:before.currentStudentId,...body}});
+    assert.equal(result.response.status, 400);
+  }
+  const after = (await request('/api/workspace')).payload.workspace;
+  assert.deepEqual(after.documents, before.documents);
+  assert.deepEqual(after.extractionSections, before.extractionSections);
+});
